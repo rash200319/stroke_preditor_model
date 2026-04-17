@@ -72,3 +72,32 @@ Mean : 0.9932 (+/- 0.0021)
 Plot saved as 'stroke\_model\_results.png'
 
 Model saved as 'stroke\_xgboost\_model.json'
+
+
+# after changes ( model_comparison.py )
+ ---
+ Data ready. Training 3 models...
+
+Training Logistic Regression...
+  ✓ AUC=0.8517  Recall=0.7984
+
+Training Random Forest...
+  ✓ AUC=1.0000  Recall=1.0000
+
+Training XGBoost...
+  ✓ AUC=0.9950  Recall=1.0000
+
+
+
+Model                |                Accuracy |  ROC-AUC |  Recall|  Precision    |  F1        | CV-AUC
+---------------------|-------------------------|----------|--------|---------------|------------|-------
+Logistic Regression  |     0.7707              | 0.8517   |0.7984  |  0.7563       |0.7768      |0.8460±0.0094
+Random Forest        |     0.9841              |1.0000    |1.0000  |  0.9691       |0.9843      |1.0000±0.0001
+XGBoost              |     0.9728              |0.9950    |1.0000  |   0.9483      |0.9735      |0.9957±0.0017
+
+🏆 Best model by ROC-AUC: Random Forest (1.0000) (A perfect 1.0000 AUC on test data is almost never real.!!!!!!!!!!!!!)
+
+Plot saved as 'model_comparison_results.png'
+Feature importance plot saved as 'feature_importance_comparison.png'
+
+(.venv) C:\Users\user\OneDrive\Documents\Downloads\New folder>

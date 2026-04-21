@@ -1,5 +1,5 @@
 model - XGBOOST
-cleaned - using age and gender.(by grouped mean)
+cleaned - no pre-split imputation (missing values are handled inside the model pipeline)
 
 use ipynb to clean data if needed. also i included my cleaned one.
 

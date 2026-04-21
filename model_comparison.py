@@ -34,6 +34,7 @@ LEAKAGE_COLUMNS = [
     "risk_score",
     "lifestyle_risk",
     "patient_id",
+    "id",
     "age_group",
     "bmi_category",
     "high_glucose",

@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
@@ -19,6 +20,7 @@ from sklearn.metrics import (
     roc_auc_score,
     roc_curve,
 )
+from sklearn.neighbors import NearestNeighbors
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.pipeline import Pipeline
 
@@ -42,6 +44,8 @@ from model_comparison import (
 THRESHOLD_GRID = np.round(np.arange(0.0, 1.01, 0.01), 2)
 MIN_PRECISION_FOR_RECALL_OPTIMIZATION = 0.20
 THRESHOLD_SELECTION_STRATEGY = "recall_at_precision_floor"
+SMOTE_SAMPLING_STRATEGY = 0.30
+SMOTE_K_NEIGHBORS = 5
 
 OUTPUT_PLOT_PATH = Path(__file__).with_name("model_comparison_tuned_results.png")
 THRESHOLD_TUNING_PLOT_PATH = Path(__file__).with_name("threshold_tuning_results.png")
@@ -56,18 +60,140 @@ MODEL_ORDER = [
 ]
 
 
+class SimpleSMOTE:
+    """A lightweight SMOTE implementation for dense tabular matrices."""
+
+    def __init__(
+        self,
+        sampling_strategy: float = SMOTE_SAMPLING_STRATEGY,
+        random_state: int = RANDOM_STATE,
+        k_neighbors: int = SMOTE_K_NEIGHBORS,
+    ) -> None:
+        self.sampling_strategy = sampling_strategy
+        self.random_state = random_state
+        self.k_neighbors = k_neighbors
+
+    def fit_resample(self, X: np.ndarray, y: pd.Series | np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        X_array = np.asarray(X, dtype=float)
+        y_array = np.asarray(y, dtype=int)
+
+        classes, counts = np.unique(y_array, return_counts=True)
+        if len(classes) != 2:
+            return X_array, y_array
+
+        minority_class = classes[np.argmin(counts)]
+        majority_class = classes[np.argmax(counts)]
+        minority_mask = y_array == minority_class
+        majority_mask = y_array == majority_class
+
+        X_minority = X_array[minority_mask]
+        X_majority = X_array[majority_mask]
+        y_minority = y_array[minority_mask]
+        y_majority = y_array[majority_mask]
+
+        target_minority_count = int(np.ceil(self.sampling_strategy * len(X_majority)))
+        if target_minority_count <= len(X_minority) or len(X_minority) < 2:
+            return X_array, y_array
+
+        n_samples_to_generate = target_minority_count - len(X_minority)
+        effective_k = min(self.k_neighbors, len(X_minority) - 1)
+        if effective_k < 1:
+            return X_array, y_array
+
+        nn = NearestNeighbors(n_neighbors=effective_k + 1)
+        nn.fit(X_minority)
+        neighbor_indices = nn.kneighbors(X_minority, return_distance=False)[:, 1:]
+
+        rng = np.random.default_rng(self.random_state)
+        synthetic_samples = []
+
+        for _ in range(n_samples_to_generate):
+            sample_index = rng.integers(0, len(X_minority))
+            sample = X_minority[sample_index]
+            neighbor_index = rng.choice(neighbor_indices[sample_index])
+            neighbor = X_minority[neighbor_index]
+            gap = rng.random()
+            synthetic_samples.append(sample + gap * (neighbor - sample))
+
+        X_synthetic = np.asarray(synthetic_samples, dtype=float)
+        y_synthetic = np.full(len(X_synthetic), minority_class, dtype=int)
+
+        X_resampled = np.vstack([X_majority, X_minority, X_synthetic])
+        y_resampled = np.concatenate([y_majority, y_minority, y_synthetic])
+
+        return X_resampled, y_resampled
+
+
+class SmoteTabularClassifier(BaseEstimator, ClassifierMixin):
+    """Wrap feature engineering, preprocessing, SMOTE, and a classifier in one estimator."""
+
+    def __init__(
+        self,
+        numerical_features: list[str],
+        categorical_features: list[str],
+        classifier: object,
+        use_scaler: bool,
+        sampling_strategy: float = SMOTE_SAMPLING_STRATEGY,
+        random_state: int = RANDOM_STATE,
+        k_neighbors: int = SMOTE_K_NEIGHBORS,
+    ) -> None:
+        self.numerical_features = numerical_features
+        self.categorical_features = categorical_features
+        self.classifier = classifier
+        self.use_scaler = use_scaler
+        self.sampling_strategy = sampling_strategy
+        self.random_state = random_state
+        self.k_neighbors = k_neighbors
+
+    def _engineered_numerical_features(self) -> list[str]:
+        engineered_numerical_features = self.numerical_features.copy()
+        if {"age", "has_hypertension"}.issubset(self.numerical_features):
+            engineered_numerical_features.append("age_x_has_hypertension")
+        if {"bmi_value", "glucose_level"}.issubset(self.numerical_features):
+            engineered_numerical_features.append("bmi_x_glucose_level")
+        return engineered_numerical_features
+
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> "SmoteTabularClassifier":
+        self.feature_engineering_ = InteractionFeatureAdder()
+        engineered_numerical_features = self._engineered_numerical_features()
+        self.preprocessor_ = build_preprocessor(
+            engineered_numerical_features,
+            self.categorical_features,
+            use_scaler=self.use_scaler,
+        )
+        self.smote_ = SimpleSMOTE(
+            sampling_strategy=self.sampling_strategy,
+            random_state=self.random_state,
+            k_neighbors=self.k_neighbors,
+        )
+
+        X_engineered = self.feature_engineering_.fit_transform(X, y)
+        X_processed = self.preprocessor_.fit_transform(X_engineered, y)
+        X_resampled, y_resampled = self.smote_.fit_resample(X_processed, y)
+
+        self.classifier_ = clone(self.classifier)
+        self.classifier_.fit(X_resampled, y_resampled)
+        self.classes_ = np.array(sorted(np.unique(y_resampled)))
+        return self
+
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        X_engineered = self.feature_engineering_.transform(X)
+        X_processed = self.preprocessor_.transform(X_engineered)
+        return self.classifier_.predict_proba(X_processed)
+
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        """Provide a hard-label prediction for sklearn utilities like cross_val_predict."""
+
+        proba = self.predict_proba(X)[:, 1]
+        return (proba >= 0.5).astype(int)
+
+
 def build_weighted_models(
     numerical_features: list[str],
     categorical_features: list[str],
     y_train: pd.Series,
-) -> dict[str, Pipeline]:
-    """Build class-weighted base models using the current training split."""
-
-    engineered_numerical_features = numerical_features.copy()
-    if {"age", "has_hypertension"}.issubset(numerical_features):
-        engineered_numerical_features.append("age_x_has_hypertension")
-    if {"bmi_value", "glucose_level"}.issubset(numerical_features):
-        engineered_numerical_features.append("bmi_x_glucose_level")
+) -> dict[str, SmoteTabularClassifier]:
+    """Build class-weighted models with SMOTE applied only inside training folds."""
 
     num_positive = float((y_train == 1).sum())
     num_negative = float((y_train == 0).sum())
@@ -76,81 +202,69 @@ def build_weighted_models(
     if not np.isfinite(scale_pos_weight) or scale_pos_weight <= 0:
         scale_pos_weight = DEFAULT_SCALE_POS_WEIGHT
 
-    logistic_pipeline = Pipeline(
-        steps=[
-            ("feature_engineering", InteractionFeatureAdder()),
-            (
-                "preprocessor",
-                build_preprocessor(engineered_numerical_features, categorical_features, use_scaler=True),
-            ),
-            (
-                "classifier",
-                LogisticRegression(
-                    max_iter=2000,
-                    random_state=RANDOM_STATE,
-                    solver="lbfgs",
-                    class_weight="balanced",
-                ),
-            ),
-        ]
+    logistic_model = SmoteTabularClassifier(
+        numerical_features=numerical_features,
+        categorical_features=categorical_features,
+        classifier=LogisticRegression(
+            max_iter=2000,
+            random_state=RANDOM_STATE,
+            solver="lbfgs",
+            class_weight="balanced",
+        ),
+        use_scaler=True,
+        sampling_strategy=SMOTE_SAMPLING_STRATEGY,
+        random_state=RANDOM_STATE,
+        k_neighbors=SMOTE_K_NEIGHBORS,
     )
 
-    random_forest_pipeline = Pipeline(
-        steps=[
-            ("feature_engineering", InteractionFeatureAdder()),
-            (
-                "preprocessor",
-                build_preprocessor(engineered_numerical_features, categorical_features, use_scaler=False),
-            ),
-            (
-                "classifier",
-                RandomForestClassifier(
-                    n_estimators=300,
-                    max_depth=None,
-                    min_samples_split=5,
-                    min_samples_leaf=2,
-                    max_features="sqrt",
-                    random_state=RANDOM_STATE,
-                    n_jobs=-1,
-                    class_weight="balanced",
-                ),
-            ),
-        ]
+    random_forest_model = SmoteTabularClassifier(
+        numerical_features=numerical_features,
+        categorical_features=categorical_features,
+        classifier=RandomForestClassifier(
+            n_estimators=300,
+            max_depth=None,
+            min_samples_split=5,
+            min_samples_leaf=2,
+            max_features="sqrt",
+            random_state=RANDOM_STATE,
+            n_jobs=-1,
+            class_weight="balanced",
+        ),
+        use_scaler=False,
+        sampling_strategy=SMOTE_SAMPLING_STRATEGY,
+        random_state=RANDOM_STATE,
+        k_neighbors=SMOTE_K_NEIGHBORS,
     )
 
-    xgboost_pipeline = Pipeline(
-        steps=[
-            ("feature_engineering", InteractionFeatureAdder()),
-            (
-                "preprocessor",
-                build_preprocessor(engineered_numerical_features, categorical_features, use_scaler=False),
-            ),
-            (
-                "classifier",
-                XGBClassifier(
-                    n_estimators=300,
-                    max_depth=3,
-                    learning_rate=0.05,
-                    subsample=0.8,
-                    colsample_bytree=0.8,
-                    min_child_weight=8,
-                    gamma=0.1,
-                    reg_alpha=0.1,
-                    reg_lambda=1.0,
-                    scale_pos_weight=scale_pos_weight,
-                    objective="binary:logistic",
-                    eval_metric="logloss",
-                    random_state=RANDOM_STATE,
-                    n_jobs=-1,
-                ),
-            ),
-        ]
+    xgboost_model = SmoteTabularClassifier(
+        numerical_features=numerical_features,
+        categorical_features=categorical_features,
+        classifier=XGBClassifier(
+            n_estimators=300,
+            max_depth=3,
+            learning_rate=0.05,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            min_child_weight=8,
+            gamma=0.1,
+            reg_alpha=0.1,
+            reg_lambda=1.0,
+            scale_pos_weight=scale_pos_weight,
+            objective="binary:logistic",
+            eval_metric="logloss",
+            random_state=RANDOM_STATE,
+            n_jobs=-1,
+        ),
+        use_scaler=False,
+        sampling_strategy=SMOTE_SAMPLING_STRATEGY,
+        random_state=RANDOM_STATE,
+        k_neighbors=SMOTE_K_NEIGHBORS,
     )
 
     return {
-        "Logistic Regression": logistic_pipeline,
-        "Random Forest": random_forest_pipeline,
-        "XGBoost": xgboost_pipeline,
+        "Logistic Regression": logistic_model,
+        "Random Forest": random_forest_model,
+        "XGBoost": xgboost_model,
     }
 
 

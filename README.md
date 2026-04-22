@@ -175,3 +175,20 @@ Best model by holdout ROC-AUC: Random Forest (1.0000) at threshold 0.60
 Plot saved as 'model_comparison_results.png'
 
 ```
+# after testing for data leakage in model_comparison python file
+
+```text 
+Label Shuffle Sanity Check                                                                   
+================================================================================
+Training labels are shuffled before fitting each model.
+Decision threshold: 0.60
+
+              Model  Accuracy  Precision  Recall  F1-score  ROC-AUC CV ROC-AUC (shuffled)
+Logistic Regression    0.5003     0.0000  0.0000    0.0000   0.4943       0.4850 ± 0.0033
+      Random Forest    0.5172     0.5440  0.2099    0.3029   0.4998       0.4952 ± 0.0160
+            XGBoost    0.5054     0.5260  0.1039    0.1735   0.4980       0.5055 ± 0.0089
+
+Expected behavior: ROC-AUC should be near 0.50 if there is no leakage.
+
+```
+

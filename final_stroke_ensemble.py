@@ -42,6 +42,11 @@ from xgboost import XGBClassifier
 
 RANDOM_STATE = 42
 CAT_COLS     = ["gender", "employment_type", "residence", "smoking_habit"]
+THRESHOLD_MODES = {
+    "High Sensitivity": {"min_precision": 0.08, "objective": "recall"},
+    "Balanced": {"min_precision": 0.10, "objective": "f1"},
+}
+ACTIVE_THRESHOLD_MODE = "High Sensitivity"
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -141,6 +146,48 @@ def smote(X, y, sampling_strategy=0.35, k=5, random_state=RANDOM_STATE):
 
 
 # ══════════════════════════════════════════════════════════════════
+# STEP 3b — FEATURE ENGINEERING
+# ══════════════════════════════════════════════════════════════════
+def engineer_features(X):
+    """
+    Add derived features for better predictive power.
+    Captures interactions, non-linear effects, and domain-specific indicators.
+    Handles NaN values gracefully before preprocessing imputation.
+    """
+    X_eng = X.copy()
+    
+    # Interaction features (fill NaN with 0 for missing bmi)
+    X_eng['age_x_hypertension'] = X['age'] * X['has_hypertension']
+    X_eng['age_x_heart_disease'] = X['age'] * X['has_heart_disease']
+    X_eng['glucose_x_bmi'] = X['glucose_level'] * X['bmi_value']
+    X_eng['glucose_x_bmi'] = X_eng['glucose_x_bmi'].fillna(0)
+    
+    # Age polynomials (captures accelerating risk in seniors)
+    X_eng['age_squared'] = X['age'] ** 2
+    X_eng['age_over_10'] = X['age'] / 10
+    
+    # CVD burden (cumulative cardiovascular risk)
+    X_eng['cvd_count'] = X['has_hypertension'] + X['has_heart_disease']
+    
+    # Metabolic indicators (fill NaN with 0 for missing bmi)
+    X_eng['glucose_per_bmi'] = X['glucose_level'] / (X['bmi_value'] + 1)
+    X_eng['glucose_per_bmi'] = X_eng['glucose_per_bmi'].fillna(0)
+    X_eng['bmi_deviation'] = (X['bmi_value'] - 25).abs()
+    X_eng['bmi_deviation'] = X_eng['bmi_deviation'].fillna(0)
+    
+    # High-risk age flag
+    X_eng['is_senior'] = (X['age'] >= 55).astype(int)
+    
+    # Log transformations (normalize skewed distributions)
+    X_eng['log_glucose'] = np.log(X['glucose_level'] + 1)
+    
+    # Fill any remaining NaN with 0
+    X_eng = X_eng.fillna(0)
+    
+    return X_eng
+
+
+# ══════════════════════════════════════════════════════════════════
 # STEP 4 — MODEL DEFINITIONS
 # ══════════════════════════════════════════════════════════════════
 def make_logistic(spw):
@@ -174,25 +221,42 @@ def make_xgboost(spw):
 # ══════════════════════════════════════════════════════════════════
 # STEP 5 — THRESHOLD TUNING
 # ══════════════════════════════════════════════════════════════════
-def tune_threshold(y_true, y_proba, min_precision=0.08):
+def tune_threshold(y_true, y_proba, min_precision=0.08, objective="recall"):
     """
-    Maximise recall subject to precision >= min_precision.
+    Tune a probability threshold for either recall-first or balanced behavior.
     min_precision=0.08 means: for every 12 patients flagged,
-    at least 1 must be a real stroke — acceptable for screening.
+    at least 1 must be a real stroke ? acceptable for screening.
     """
-    best_thr, best_recall = 0.5, 0.0
+    best_thr = 0.5
+    best_score = -1.0
     for thr in np.arange(0.01, 0.99, 0.01):
         y_pred = (y_proba >= thr).astype(int)
         p = precision_score(y_true, y_pred, zero_division=0)
         r = recall_score(y_true, y_pred, zero_division=0)
-        if p >= min_precision and r > best_recall:
-            best_thr, best_recall = round(thr, 2), r
+        f1 = f1_score(y_true, y_pred, zero_division=0)
+        if p < min_precision:
+            continue
+        score = r if objective == "recall" else f1
+        if score > best_score:
+            best_thr = round(thr, 2)
+            best_score = score
     return best_thr
 
 
-# ══════════════════════════════════════════════════════════════════
-# STEP 6 — STACKING META-FEATURES (out-of-fold — no leakage)
-# ══════════════════════════════════════════════════════════════════
+def tune_thresholds_by_mode(y_true, y_proba):
+    """Return tuned thresholds for all operating modes."""
+
+    tuned = {}
+    for mode, config in THRESHOLD_MODES.items():
+        tuned[mode] = tune_threshold(
+            y_true,
+            y_proba,
+            min_precision=config["min_precision"],
+            objective=config["objective"],
+        )
+    return tuned
+
+
 def build_oof_meta_features(base_models_fn, X_tr, y_tr, spw,
                              X_te, n_splits=5):
     """
@@ -264,6 +328,9 @@ def main():
     X  = df.drop(columns=["stroke_event"])
     y  = df["stroke_event"].astype(int)
 
+    # ── Engineer features — BEFORE any preprocessing or split ──────
+    X = engineer_features(X)
+
     # ── Stratified split — BEFORE any preprocessing ───────────────
     X_train_full, X_test, y_train_full, y_test = train_test_split(
         X, y, test_size=0.20, random_state=RANDOM_STATE, stratify=y
@@ -327,51 +394,49 @@ def main():
     val_probas["Stacking"] = meta_lr.predict_proba(oof_val)[:, 1]
 
     # ── Tune thresholds on validation ─────────────────────────────
-    print("\n── Tuning thresholds on validation set ──")
-    thresholds = {}
+    print("\n?????? Tuning thresholds on validation set ??????")
+    thresholds = {mode: {} for mode in THRESHOLD_MODES}
     all_names  = list(BASE_FNS.keys()) + ["Soft Voting", "Stacking"]
-    for name in all_names:
-        thr = tune_threshold(y_val.values, val_probas[name], min_precision=0.08)
-        thresholds[name] = thr
-        r   = evaluate(name, y_val.values, val_probas[name], thr)
-        print(f"  {name:<22} thr={thr:.2f}  "
-              f"Recall={r['recall']:.3f}  Precision={r['precision']:.3f}  "
-              f"F1={r['f1']:.3f}  AUC={r['roc_auc']:.3f}")
+    for mode, config in THRESHOLD_MODES.items():
+        print(f"\n  Operating mode: {mode}")
+        for name in all_names:
+            thr = tune_threshold(
+                y_val.values,
+                val_probas[name],
+                min_precision=config["min_precision"],
+                objective=config["objective"],
+            )
+            thresholds[mode][name] = thr
+            r = evaluate(name, y_val.values, val_probas[name], thr)
+            print(f"    {name:<22} thr={thr:.2f}  "
+                  f"Recall={r['recall']:.3f}  Precision={r['precision']:.3f}  "
+                  f"F1={r['f1']:.3f}  AUC={r['roc_auc']:.3f}")
 
-    # ══════════════════════════════════════════════════════════════
-    # PHASE B — Retrain on FULL training data, evaluate on test set
-    # ══════════════════════════════════════════════════════════════
-    print("\n── Phase B: Retraining on full train, evaluating on test ──")
+    # â”€â”€ Phase B â€” Retrain on FULL training data, evaluate on test set â”€â”€
+    print("\nâ”€â”€ Phase B: Retraining on full train, evaluating on test â”€â”€")
     spw_full  = (y_train_full == 0).sum() / max((y_train_full == 1).sum(), 1)
     X_full_sm, y_full_sm = smote(X_full_p, y_train_full.values)
 
-    # Train base models on full train
     final_models  = {}
     test_probas   = {}
 
     for name, fn in BASE_FNS.items():
         model = fn(spw_full)
         if name == "XGBoost":
-            # Need a small eval set for early stopping
             Xf_tr2, Xf_es, yf_tr2, yf_es = train_test_split(
                 X_full_sm, y_full_sm,
                 test_size=0.12, random_state=RANDOM_STATE, stratify=y_full_sm
             )
-            model.fit(Xf_tr2, yf_tr2,
-                      eval_set=[(Xf_es, yf_es)], verbose=50)
+            model.fit(Xf_tr2, yf_tr2, eval_set=[(Xf_es, yf_es)], verbose=50)
         else:
             model.fit(X_full_sm, y_full_sm)
-        final_models[name]  = model
-        test_probas[name]   = model.predict_proba(X_test_p)[:, 1]
+        final_models[name] = model
+        test_probas[name] = model.predict_proba(X_test_p)[:, 1]
         print(f"  Trained {name}")
 
-    # Soft voting on test
-    test_probas["Soft Voting"] = np.mean(
-        [test_probas[n] for n in BASE_FNS], axis=0
-    )
+    test_probas["Soft Voting"] = np.mean([test_probas[n] for n in BASE_FNS], axis=0)
 
-    # Stacking on test — OOF meta-features on full train
-    print("\n── Building OOF meta-features for stacking (full train) ──")
+    print("\nâ”€â”€ Building OOF meta-features for stacking (full train) â”€â”€")
     oof_full_tr, oof_test = build_oof_meta_features(
         BASE_FNS, X_full_p, y_train_full.values, spw_full, X_test_p
     )
@@ -380,39 +445,35 @@ def main():
     meta_lr_full.fit(oof_full_tr, y_train_full.values)
     test_probas["Stacking"] = meta_lr_full.predict_proba(oof_test)[:, 1]
 
-    # ── Final evaluation ──────────────────────────────────────────
-    results = {}
-    for name in all_names:
-        results[name] = evaluate(name, y_test.values,
-                                  test_probas[name], thresholds[name])
+    results_by_mode = {}
+    for mode in THRESHOLD_MODES:
+        results_by_mode[mode] = {}
+        for name in all_names:
+            results_by_mode[mode][name] = evaluate(
+                name,
+                y_test.values,
+                test_probas[name],
+                thresholds[mode][name],
+            )
 
-    # ── Print comparison table ────────────────────────────────────
-    print("\n" + "=" * 80)
-    print("  FINAL TEST SET RESULTS  (threshold tuned on validation set)")
-    print("=" * 80)
-    hdr = f"{'Model':<24} {'Thr':>5} {'AUC-ROC':>8} {'AUC-PR':>8} {'Recall':>8} {'Precision':>10} {'F1':>8}"
-    print(hdr)
-    print("-" * 80)
-    for name in all_names:
-        r = results[name]
-        flag = " ★" if name == "Stacking" else ""
-        print(f"{name:<24} {r['threshold']:>5.2f} {r['roc_auc']:>8.4f} "
-              f"{r['avg_prec']:>8.4f} {r['recall']:>8.4f} "
-              f"{r['precision']:>10.4f} {r['f1']:>8.4f}{flag}")
-    print("=" * 80)
+    for mode in THRESHOLD_MODES:
+        print("\n" + "=" * 80)
+        print(f"  FINAL TEST SET RESULTS  ({mode} mode)")
+        print("=" * 80)
+        hdr = f"{'Model':<24} {'Thr':>5} {'AUC-ROC':>8} {'AUC-PR':>8} {'Recall':>8} {'Precision':>10} {'F1':>8}"
+        print(hdr)
+        print("-" * 80)
+        for name in all_names:
+            r = results_by_mode[mode][name]
+            flag = " â˜…" if name == "Stacking" else ""
+            print(f"{name:<24} {r['threshold']:>5.2f} {r['roc_auc']:>8.4f} "
+                  f"{r['avg_prec']:>8.4f} {r['recall']:>8.4f} "
+                  f"{r['precision']:>10.4f} {r['f1']:>8.4f}{flag}")
+        print("=" * 80)
 
-    # Confusion matrix breakdown for best model (Stacking)
-    best_name = max(results, key=lambda k: results[k]["recall"])
-    r_best    = results[best_name]
-    cm        = confusion_matrix(y_test.values, r_best["y_pred"])
-    tn, fp, fn_count, tp = cm.ravel()
-    print(f"\nBest recall model → {best_name} (thr={r_best['threshold']:.2f})")
-    print(f"  True Negatives  (healthy correctly cleared) : {tn}")
-    print(f"  False Positives (healthy flagged for review) : {fp}")
-    print(f"  False Negatives (stroke cases MISSED) ⚠️    : {fn_count}")
-    print(f"  True Positives  (stroke cases caught) ✓     : {tp}")
+    active_results = results_by_mode[ACTIVE_THRESHOLD_MODE]
+    active_thresholds = thresholds[ACTIVE_THRESHOLD_MODE]
 
-    # ── Feature importance (XGBoost) ─────────────────────────────
     xgb_model = final_models["XGBoost"]
     imp = pd.Series(xgb_model.feature_importances_,
                     index=feat_names).sort_values(ascending=False)
@@ -447,7 +508,7 @@ def main():
     for name in all_names:
         from sklearn.metrics import roc_curve
         fpr, tpr, _ = roc_curve(y_test.values, test_probas[name])
-        auc = results[name]["roc_auc"]
+        auc = active_results[name]["roc_auc"]
         ax.plot(fpr, tpr, label=f"{name} (AUC={auc:.3f})",
                 color=colors[name], linestyle=styles[name], linewidth=2)
     ax.plot([0,1],[0,1],"k--", linewidth=0.8)
@@ -462,7 +523,7 @@ def main():
     from sklearn.metrics import precision_recall_curve
     for name in all_names:
         prec, rec, _ = precision_recall_curve(y_test.values, test_probas[name])
-        ap = results[name]["avg_prec"]
+        ap = active_results[name]["avg_prec"]
         ax.plot(rec, prec, label=f"{name} (AP={ap:.3f})",
                 color=colors[name], linestyle=styles[name], linewidth=2)
     ax.axhline(y_test.mean(), color="gray", linestyle=":", linewidth=1,
@@ -491,7 +552,7 @@ def main():
     axes_flat = axes2.flatten()
 
     for i, name in enumerate(all_names):
-        r   = results[name]
+        r   = active_results[name]
         cm  = confusion_matrix(y_test.values, r["y_pred"])
         tn2, fp2, fn2, tp2 = cm.ravel()
         ConfusionMatrixDisplay(cm, display_labels=["No Stroke","Stroke"]).plot(
@@ -520,8 +581,10 @@ def main():
     ax3.plot(thrs, recs,  label="Recall",    color="tomato",    linewidth=2.2)
     ax3.plot(thrs, precs, label="Precision", color="steelblue", linewidth=2.2)
     ax3.plot(thrs, f1s,   label="F1",        color="seagreen",  linewidth=2.2)
-    ax3.axvline(thresholds["Stacking"], color="black", linestyle="--",
-                linewidth=1.5, label=f"Chosen thr={thresholds['Stacking']:.2f}")
+    ax3.axvline(active_thresholds["Stacking"], color="black", linestyle="--",
+                linewidth=1.5, label=f"High Sensitivity thr={active_thresholds['Stacking']:.2f}")
+    ax3.axvline(thresholds["Balanced"]["Stacking"], color="purple", linestyle="--",
+                linewidth=1.5, label=f"Balanced thr={thresholds['Balanced']['Stacking']:.2f}")
     ax3.axhline(0.08, color="orange", linestyle=":", linewidth=1,
                 label="Min precision floor (0.08)")
     ax3.set_title("Stacking Ensemble — Threshold Sweep on Test Set")

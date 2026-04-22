@@ -6,16 +6,21 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     ConfusionMatrixDisplay,
+    PrecisionRecallDisplay,
     RocCurveDisplay,
     accuracy_score,
+    auc,
+    fbeta_score,
     confusion_matrix,
     f1_score,
+    precision_recall_curve,
     precision_score,
     recall_score,
     roc_auc_score,
@@ -29,7 +34,9 @@ from xgboost import XGBClassifier
 warnings.filterwarnings("ignore")
 
 RANDOM_STATE = 42
-CLASSIFICATION_THRESHOLD = 0.6
+CLASSIFICATION_THRESHOLD = 0.1
+F2_THRESHOLD = 0.12
+SCALE_POS_WEIGHT = 19.5
 TARGET_COLUMN = "stroke_event"
 LEAKAGE_COLUMNS = [
     "risk_score",
@@ -42,6 +49,27 @@ LEAKAGE_COLUMNS = [
 ]
 DATA_PATH = Path(__file__).with_name("healthcare_data_cleaned.csv")
 OUTPUT_PLOT_PATH = Path(__file__).with_name("model_comparison_results.png")
+
+
+class InteractionFeatureAdder(BaseEstimator, TransformerMixin):
+    """Create clinically meaningful interaction features inside the pipeline."""
+
+    def fit(self, X: pd.DataFrame, y: pd.Series | None = None) -> "InteractionFeatureAdder":
+        return self
+
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        X_out = X.copy()
+
+        if {"age", "has_hypertension"}.issubset(X_out.columns):
+            X_out["age_x_has_hypertension"] = X_out["age"] * X_out["has_hypertension"]
+
+        if {"bmi_value", "glucose_level"}.issubset(X_out.columns):
+            X_out["bmi_x_glucose_level"] = X_out["bmi_value"] * X_out["glucose_level"]
+
+        return X_out
 
 
 def make_one_hot_encoder() -> OneHotEncoder:
@@ -121,25 +149,38 @@ def build_models(
 ) -> dict[str, Pipeline]:
     """Create the model pipelines used for comparison."""
 
+    engineered_numerical_features = numerical_features.copy()
+    if {"age", "has_hypertension"}.issubset(numerical_features):
+        engineered_numerical_features.append("age_x_has_hypertension")
+    if {"bmi_value", "glucose_level"}.issubset(numerical_features):
+        engineered_numerical_features.append("bmi_x_glucose_level")
+
     logistic_pipeline = Pipeline(
         steps=[
-            ("preprocessor", build_preprocessor(numerical_features, categorical_features, use_scaler=True)),
+            ("feature_engineering", InteractionFeatureAdder()),
+            (
+                "preprocessor",
+                build_preprocessor(engineered_numerical_features, categorical_features, use_scaler=True),
+            ),
             (
                 "classifier",
                 LogisticRegression(
                     max_iter=2000,
                     random_state=RANDOM_STATE,
                     solver="lbfgs",
+                    class_weight="balanced",
                 ),
             ),
         ]
     )
 
-    tree_preprocessor = build_preprocessor(numerical_features, categorical_features, use_scaler=False)
-
     random_forest_pipeline = Pipeline(
         steps=[
-            ("preprocessor", tree_preprocessor),
+            ("feature_engineering", InteractionFeatureAdder()),
+            (
+                "preprocessor",
+                build_preprocessor(engineered_numerical_features, categorical_features, use_scaler=False),
+            ),
             (
                 "classifier",
                 RandomForestClassifier(
@@ -148,6 +189,7 @@ def build_models(
                     min_samples_split=5,
                     min_samples_leaf=2,
                     max_features="sqrt",
+                    class_weight="balanced",
                     random_state=RANDOM_STATE,
                     n_jobs=-1,
                 ),
@@ -157,19 +199,24 @@ def build_models(
 
     xgboost_pipeline = Pipeline(
         steps=[
-            ("preprocessor", tree_preprocessor),
+            ("feature_engineering", InteractionFeatureAdder()),
+            (
+                "preprocessor",
+                build_preprocessor(engineered_numerical_features, categorical_features, use_scaler=False),
+            ),
             (
                 "classifier",
                 XGBClassifier(
                     n_estimators=300,
-                    max_depth=4,
+                    max_depth=3,
                     learning_rate=0.05,
                     subsample=0.8,
                     colsample_bytree=0.8,
-                    min_child_weight=3,
+                    min_child_weight=8,
                     gamma=0.1,
                     reg_alpha=0.1,
                     reg_lambda=1.0,
+                    scale_pos_weight=SCALE_POS_WEIGHT,
                     objective="binary:logistic",
                     eval_metric="logloss",
                     random_state=RANDOM_STATE,
@@ -201,6 +248,10 @@ def evaluate_model(
 
     y_proba = pipeline.predict_proba(X_test)[:, 1]
     y_pred = (y_proba >= CLASSIFICATION_THRESHOLD).astype(int)
+    y_pred_custom = (y_proba >= F2_THRESHOLD).astype(int)
+    f2 = fbeta_score(y_test, y_pred_custom, beta=2, zero_division=0)
+    pr_precision, pr_recall, _ = precision_recall_curve(y_test, y_proba)
+    pr_auc = auc(pr_recall, pr_precision)
 
     cv_scores = cross_validate(
         pipeline,
@@ -213,6 +264,7 @@ def evaluate_model(
             "recall": "recall",
             "f1": "f1",
             "roc_auc": "roc_auc",
+            "pr_auc": "average_precision",
         },
         n_jobs=-1,
         return_train_score=False,
@@ -227,7 +279,9 @@ def evaluate_model(
         "precision": precision_score(y_test, y_pred, zero_division=0),
         "recall": recall_score(y_test, y_pred, zero_division=0),
         "f1": f1_score(y_test, y_pred, zero_division=0),
+        "f2": f2,
         "roc_auc": roc_auc_score(y_test, y_proba),
+        "pr_auc": pr_auc,
         "cv_accuracy_mean": float(np.mean(cv_scores["test_accuracy"])),
         "cv_accuracy_std": float(np.std(cv_scores["test_accuracy"])),
         "cv_precision_mean": float(np.mean(cv_scores["test_precision"])),
@@ -238,6 +292,8 @@ def evaluate_model(
         "cv_f1_std": float(np.std(cv_scores["test_f1"])),
         "cv_roc_auc_mean": float(np.mean(cv_scores["test_roc_auc"])),
         "cv_roc_auc_std": float(np.std(cv_scores["test_roc_auc"])),
+        "cv_pr_auc_mean": float(np.mean(cv_scores["test_pr_auc"])),
+        "cv_pr_auc_std": float(np.std(cv_scores["test_pr_auc"])),
     }
 
 
@@ -249,11 +305,14 @@ def print_results(results: list[dict[str, float | np.ndarray | Pipeline]]) -> No
             {
                 "Model": result["name"],
                 "Accuracy": result["accuracy"],
+                "ROC-AUC": result["roc_auc"],
+                "PR-AUC": result["pr_auc"],
                 "Precision": result["precision"],
                 "Recall": result["recall"],
                 "F1-score": result["f1"],
-                "ROC-AUC": result["roc_auc"],
+                f"F2-score @ {F2_THRESHOLD:.2f}": result["f2"],
                 "CV ROC-AUC": f"{result['cv_roc_auc_mean']:.4f} ± {result['cv_roc_auc_std']:.4f}",
+                "CV PR-AUC": f"{result['cv_pr_auc_mean']:.4f} ± {result['cv_pr_auc_std']:.4f}",
             }
             for result in results
         ]
@@ -269,11 +328,47 @@ def print_results(results: list[dict[str, float | np.ndarray | Pipeline]]) -> No
     )
 
 
+def extract_odds_ratios(logistic_pipeline: Pipeline, top_n: int = 20) -> pd.DataFrame:
+    """Extract odds ratios from a fitted Logistic Regression pipeline."""
+
+    classifier = logistic_pipeline.named_steps.get("classifier")
+    preprocessor = logistic_pipeline.named_steps.get("preprocessor")
+
+    if not isinstance(classifier, LogisticRegression):
+        raise TypeError("extract_odds_ratios requires a pipeline with LogisticRegression as classifier.")
+
+    if preprocessor is None or not hasattr(preprocessor, "transform"):
+        raise ValueError("The provided pipeline does not include a fitted preprocessor step.")
+
+    if not hasattr(classifier, "coef_"):
+        raise ValueError("The Logistic Regression model must be fitted before extracting odds ratios.")
+
+    if hasattr(preprocessor, "get_feature_names_out"):
+        feature_names = preprocessor.get_feature_names_out()
+    else:
+        feature_names = np.array([f"feature_{i}" for i in range(classifier.coef_.shape[1])])
+
+    coefficients = classifier.coef_.ravel()
+    odds_ratios = np.exp(coefficients)
+
+    odds_df = pd.DataFrame(
+        {
+            "feature": feature_names,
+            "log_odds": coefficients,
+            "odds_ratio": odds_ratios,
+            "effect_strength": np.abs(coefficients),
+        }
+    )
+
+    odds_df = odds_df.sort_values("effect_strength", ascending=False).head(top_n)
+    return odds_df.drop(columns=["effect_strength"])
+
+
 def plot_results(
     results: list[dict[str, float | np.ndarray | Pipeline]],
     y_test: pd.Series,
 ) -> None:
-    """Create ROC curves, metric comparison bars, and confusion matrices."""
+    """Create ROC/PR curves, metric comparison bars, and confusion matrices."""
 
     fig = plt.figure(figsize=(20, 12))
     fig.suptitle("Model Comparison - Stroke Prediction", fontsize=16, fontweight="bold", y=1.01)
@@ -295,9 +390,23 @@ def plot_results(
     ax_roc.set_title("ROC Curves - All Models")
     ax_roc.legend(fontsize=8)
 
-    ax_bar = fig.add_subplot(grid[0, 1])
-    metric_keys = ["accuracy", "precision", "recall", "f1", "roc_auc"]
-    metric_labels = ["Accuracy", "Precision", "Recall", "F1", "ROC-AUC"]
+    ax_pr = fig.add_subplot(grid[0, 1])
+    baseline_pr = float(y_test.mean())
+    for result, color in zip(results, colors):
+        PrecisionRecallDisplay.from_predictions(
+            y_test,
+            result["y_proba"],
+            ax=ax_pr,
+            name=f"{result['name']} (AUC={result['pr_auc']:.4f})",
+            color=color,
+        )
+    ax_pr.axhline(y=baseline_pr, color="k", linestyle="--", linewidth=0.8, label="Baseline")
+    ax_pr.set_title("Precision-Recall Curves")
+    ax_pr.legend(fontsize=8)
+
+    ax_bar = fig.add_subplot(grid[0, 2])
+    metric_keys = ["roc_auc", "pr_auc", "recall", "f2"]
+    metric_labels = ["ROC-AUC", "PR-AUC", "Recall", f"F2@{F2_THRESHOLD:.2f}"]
     x_positions = np.arange(len(metric_keys))
     bar_width = 0.25
 
@@ -314,36 +423,9 @@ def plot_results(
     ax_bar.set_xticks(x_positions + bar_width)
     ax_bar.set_xticklabels(metric_labels)
     ax_bar.set_ylim(0.0, 1.05)
-    ax_bar.set_title("Holdout Metric Comparison")
+    ax_bar.set_title("Imbalance-Aware Metric Comparison")
     ax_bar.set_ylabel("Score")
     ax_bar.legend(fontsize=8)
-
-    ax_cv = fig.add_subplot(grid[0, 2])
-    cv_means = [result["cv_roc_auc_mean"] for result in results]
-    cv_stds = [result["cv_roc_auc_std"] for result in results]
-    bars = ax_cv.bar(
-        model_names,
-        cv_means,
-        yerr=cv_stds,
-        capsize=6,
-        color=colors,
-        alpha=0.85,
-        error_kw={"linewidth": 2},
-    )
-    ax_cv.set_ylim(0.0, 1.05)
-    ax_cv.set_title("5-Fold CV ROC-AUC (Mean ± Std)")
-    ax_cv.set_ylabel("ROC-AUC")
-    for bar, mean in zip(bars, cv_means):
-        ax_cv.text(
-            bar.get_x() + bar.get_width() / 2,
-            bar.get_height() + 0.01,
-            f"{mean:.4f}",
-            ha="center",
-            va="bottom",
-            fontsize=9,
-            fontweight="bold",
-        )
-    ax_cv.tick_params(axis="x", labelsize=9)
 
     for index, result in enumerate(results):
         ax_cm = fig.add_subplot(grid[1, index])
@@ -392,12 +474,19 @@ def main() -> None:
         result = evaluate_model(name, pipeline, X_train, X_test, y_train, y_test, cv_strategy)
         results.append(result)
         print(
-            f"  ROC-AUC={result['roc_auc']:.4f}  "
-            f"Recall={result['recall']:.4f}  F1={result['f1']:.4f}\n"
+            f"  ROC-AUC={result['roc_auc']:.4f}  PR-AUC={result['pr_auc']:.4f}  "
+            f"Recall={result['recall']:.4f}  F1={result['f1']:.4f}  "
+            f"F2@{F2_THRESHOLD:.2f}={result['f2']:.4f}\n"
         )
 
     print_results(results)
     plot_results(results, y_test)
+
+    logistic_result = next((result for result in results if result["name"] == "Logistic Regression"), None)
+    if logistic_result is not None:
+        odds_df = extract_odds_ratios(logistic_result["model"], top_n=15)
+        print("\nTop Logistic Regression odds ratios (by |log-odds|):")
+        print(odds_df.to_string(index=False, float_format=lambda value: f"{value:.4f}"))
 
 
 if __name__ == "__main__":

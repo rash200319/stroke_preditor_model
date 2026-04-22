@@ -13,6 +13,9 @@ def main() -> None:
     # Remove accidental index column if present.
     if "Unnamed: 0" in df.columns:
         df = df.drop(columns=["Unnamed: 0"])
+    # Drop duplicate rows to expose the true imbalanced dataset
+    df = df.drop_duplicates()
+    print(f"Dataset shape after dropping duplicates: {df.shape}")
 
     print("Dataset shape:", df.shape)
     print("\nFirst few rows:")

@@ -20,9 +20,8 @@ from sklearn.metrics import (
     roc_auc_score,
     roc_curve,
 )
+from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold, train_test_split
 from sklearn.neighbors import NearestNeighbors
-from sklearn.model_selection import StratifiedKFold, train_test_split
-from sklearn.pipeline import Pipeline
 
 from xgboost import XGBClassifier
 
@@ -46,6 +45,8 @@ MIN_PRECISION_FOR_RECALL_OPTIMIZATION = 0.20
 THRESHOLD_SELECTION_STRATEGY = "recall_at_precision_floor"
 SMOTE_SAMPLING_STRATEGY = 0.30
 SMOTE_K_NEIGHBORS = 5
+RANDOM_SEARCH_CV_FOLDS = 3
+RANDOM_SEARCH_ITERATIONS = 12
 
 OUTPUT_PLOT_PATH = Path(__file__).with_name("model_comparison_tuned_results.png")
 THRESHOLD_TUNING_PLOT_PATH = Path(__file__).with_name("threshold_tuning_results.png")
@@ -58,6 +59,29 @@ MODEL_ORDER = [
     "Stacking Ensemble",
     "Rule-Based Hybrid",
 ]
+
+BASE_MODEL_SEARCH_SPACES = {
+    "Logistic Regression": {
+        "classifier__C": [0.01, 0.1, 1, 10],
+        "classifier__penalty": ["l2"],
+        "classifier__solver": ["lbfgs"],
+        "classifier__class_weight": ["balanced"],
+    },
+    "Random Forest": {
+        "classifier__n_estimators": [100, 200, 300],
+        "classifier__max_depth": [None, 5, 10, 20],
+        "classifier__min_samples_split": [2, 5, 10],
+        "classifier__class_weight": ["balanced"],
+    },
+    "XGBoost": {
+        "classifier__n_estimators": [100, 200, 300],
+        "classifier__max_depth": [3, 5, 7],
+        "classifier__learning_rate": [0.01, 0.1, 0.2],
+        "classifier__subsample": [0.7, 0.8, 1.0],
+        "classifier__colsample_bytree": [0.7, 0.8, 1.0],
+        "classifier__scale_pos_weight": [3, 5, 7, 10],
+    },
+}
 
 
 class SimpleSMOTE:
@@ -83,13 +107,11 @@ class SimpleSMOTE:
 
         minority_class = classes[np.argmin(counts)]
         majority_class = classes[np.argmax(counts)]
-        minority_mask = y_array == minority_class
-        majority_mask = y_array == majority_class
 
-        X_minority = X_array[minority_mask]
-        X_majority = X_array[majority_mask]
-        y_minority = y_array[minority_mask]
-        y_majority = y_array[majority_mask]
+        X_minority = X_array[y_array == minority_class]
+        X_majority = X_array[y_array == majority_class]
+        y_minority = y_array[y_array == minority_class]
+        y_majority = y_array[y_array == majority_class]
 
         target_minority_count = int(np.ceil(self.sampling_strategy * len(X_majority)))
         if target_minority_count <= len(X_minority) or len(X_minority) < 2:
@@ -120,7 +142,6 @@ class SimpleSMOTE:
 
         X_resampled = np.vstack([X_majority, X_minority, X_synthetic])
         y_resampled = np.concatenate([y_majority, y_minority, y_synthetic])
-
         return X_resampled, y_resampled
 
 
@@ -182,90 +203,125 @@ class SmoteTabularClassifier(BaseEstimator, ClassifierMixin):
         return self.classifier_.predict_proba(X_processed)
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
-        """Provide a hard-label prediction for sklearn utilities like cross_val_predict."""
-
         proba = self.predict_proba(X)[:, 1]
         return (proba >= 0.5).astype(int)
+
+
+def strip_classifier_prefix(best_params: dict[str, object]) -> dict[str, object]:
+    """Convert sklearn search parameter names into classifier constructor kwargs."""
+
+    return {key.removeprefix("classifier__"): value for key, value in best_params.items()}
 
 
 def build_weighted_models(
     numerical_features: list[str],
     categorical_features: list[str],
     y_train: pd.Series,
+    model_params: dict[str, dict[str, object]] | None = None,
 ) -> dict[str, SmoteTabularClassifier]:
     """Build class-weighted models with SMOTE applied only inside training folds."""
 
     num_positive = float((y_train == 1).sum())
     num_negative = float((y_train == 0).sum())
     scale_pos_weight = num_negative / max(num_positive, 1.0)
-    # Keep a sensible fallback if the split is unexpectedly degenerate.
     if not np.isfinite(scale_pos_weight) or scale_pos_weight <= 0:
         scale_pos_weight = DEFAULT_SCALE_POS_WEIGHT
 
-    logistic_model = SmoteTabularClassifier(
-        numerical_features=numerical_features,
-        categorical_features=categorical_features,
-        classifier=LogisticRegression(
-            max_iter=2000,
-            random_state=RANDOM_STATE,
-            solver="lbfgs",
-            class_weight="balanced",
-        ),
-        use_scaler=True,
-        sampling_strategy=SMOTE_SAMPLING_STRATEGY,
-        random_state=RANDOM_STATE,
-        k_neighbors=SMOTE_K_NEIGHBORS,
-    )
+    logistic_classifier_params = {
+        "C": 1.0,
+        "max_iter": 2000,
+        "random_state": RANDOM_STATE,
+        "solver": "lbfgs",
+        "class_weight": "balanced",
+    }
+    random_forest_classifier_params = {
+        "n_estimators": 300,
+        "max_depth": None,
+        "min_samples_split": 5,
+        "min_samples_leaf": 2,
+        "max_features": "sqrt",
+        "random_state": RANDOM_STATE,
+        "n_jobs": -1,
+        "class_weight": "balanced",
+    }
+    xgboost_classifier_params = {
+        "n_estimators": 300,
+        "max_depth": 3,
+        "learning_rate": 0.05,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "min_child_weight": 8,
+        "gamma": 0.1,
+        "reg_alpha": 0.1,
+        "reg_lambda": 1.0,
+        "scale_pos_weight": scale_pos_weight,
+        "objective": "binary:logistic",
+        "eval_metric": "logloss",
+        "random_state": RANDOM_STATE,
+        "n_jobs": -1,
+    }
 
-    random_forest_model = SmoteTabularClassifier(
-        numerical_features=numerical_features,
-        categorical_features=categorical_features,
-        classifier=RandomForestClassifier(
-            n_estimators=300,
-            max_depth=None,
-            min_samples_split=5,
-            min_samples_leaf=2,
-            max_features="sqrt",
-            random_state=RANDOM_STATE,
-            n_jobs=-1,
-            class_weight="balanced",
-        ),
-        use_scaler=False,
-        sampling_strategy=SMOTE_SAMPLING_STRATEGY,
-        random_state=RANDOM_STATE,
-        k_neighbors=SMOTE_K_NEIGHBORS,
-    )
-
-    xgboost_model = SmoteTabularClassifier(
-        numerical_features=numerical_features,
-        categorical_features=categorical_features,
-        classifier=XGBClassifier(
-            n_estimators=300,
-            max_depth=3,
-            learning_rate=0.05,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            min_child_weight=8,
-            gamma=0.1,
-            reg_alpha=0.1,
-            reg_lambda=1.0,
-            scale_pos_weight=scale_pos_weight,
-            objective="binary:logistic",
-            eval_metric="logloss",
-            random_state=RANDOM_STATE,
-            n_jobs=-1,
-        ),
-        use_scaler=False,
-        sampling_strategy=SMOTE_SAMPLING_STRATEGY,
-        random_state=RANDOM_STATE,
-        k_neighbors=SMOTE_K_NEIGHBORS,
-    )
+    if model_params:
+        logistic_classifier_params.update(model_params.get("Logistic Regression", {}))
+        random_forest_classifier_params.update(model_params.get("Random Forest", {}))
+        xgboost_classifier_params.update(model_params.get("XGBoost", {}))
 
     return {
-        "Logistic Regression": logistic_model,
-        "Random Forest": random_forest_model,
-        "XGBoost": xgboost_model,
+        "Logistic Regression": SmoteTabularClassifier(
+            numerical_features=numerical_features,
+            categorical_features=categorical_features,
+            classifier=LogisticRegression(**logistic_classifier_params),
+            use_scaler=True,
+        ),
+        "Random Forest": SmoteTabularClassifier(
+            numerical_features=numerical_features,
+            categorical_features=categorical_features,
+            classifier=RandomForestClassifier(**random_forest_classifier_params),
+            use_scaler=False,
+        ),
+        "XGBoost": SmoteTabularClassifier(
+            numerical_features=numerical_features,
+            categorical_features=categorical_features,
+            classifier=XGBClassifier(**xgboost_classifier_params),
+            use_scaler=False,
+        ),
     }
+
+
+def tune_base_model_hyperparameters(
+    numerical_features: list[str],
+    categorical_features: list[str],
+    X_train_fit: pd.DataFrame,
+    y_train_fit: pd.Series,
+) -> dict[str, dict[str, object]]:
+    """Tune the base learners with randomized search on the inner training split only."""
+
+    print("\nHyperparameter tuning on the inner training split (recall-focused)...")
+    tuned_params: dict[str, dict[str, object]] = {}
+    base_models = build_weighted_models(numerical_features, categorical_features, y_train_fit)
+
+    for model_name in ["Logistic Regression", "Random Forest", "XGBoost"]:
+        search_space = BASE_MODEL_SEARCH_SPACES[model_name]
+        n_iter = min(
+            RANDOM_SEARCH_ITERATIONS,
+            int(np.prod([len(values) for values in search_space.values()])),
+        )
+        search = RandomizedSearchCV(
+            estimator=base_models[model_name],
+            param_distributions=search_space,
+            n_iter=n_iter,
+            scoring="recall",
+            cv=RANDOM_SEARCH_CV_FOLDS,
+            random_state=RANDOM_STATE,
+            n_jobs=-1,
+            refit=True,
+        )
+        search.fit(X_train_fit, y_train_fit)
+        best_params = strip_classifier_prefix(search.best_params_)
+        tuned_params[model_name] = best_params
+        print(f"Best {model_name} params: {best_params}")
+
+    return tuned_params
 
 
 def make_threshold_table(y_true: pd.Series, y_proba: np.ndarray) -> pd.DataFrame:
@@ -301,16 +357,12 @@ def choose_best_threshold(threshold_df: pd.DataFrame) -> tuple[float, str]:
 
     eligible = threshold_df[threshold_df["precision"] >= MIN_PRECISION_FOR_RECALL_OPTIMIZATION]
     if eligible.empty:
-        eligible = threshold_df
-        selection_mode = "fallback_max_f1"
-        best_row = eligible.sort_values(
+        best_row = threshold_df.sort_values(
             by=["f1", "recall", "threshold"], ascending=[False, False, True]
         ).iloc[0]
-        return float(best_row["threshold"]), selection_mode
+        return float(best_row["threshold"]), "fallback_max_f1"
 
-    best_row = eligible.sort_values(
-        by=["recall", "f1", "threshold"], ascending=[False, False, True]
-    ).iloc[0]
+    best_row = eligible.sort_values(by=["recall", "f1", "threshold"], ascending=[False, False, True]).iloc[0]
     return float(best_row["threshold"]), "maximize_recall_with_precision_floor"
 
 
@@ -463,7 +515,8 @@ def plot_roc_curves(
 
     for model_name in MODEL_ORDER:
         fpr, tpr, _ = roc_curve(y_true, probability_map[model_name])
-        label = f"{model_name} (thr={tuned_thresholds[model_name]:.2f}, AUC={roc_auc_score(y_true, probability_map[model_name]):.4f})"
+        auc_value = roc_auc_score(y_true, probability_map[model_name])
+        label = f"{model_name} (thr={tuned_thresholds[model_name]:.2f}, AUC={auc_value:.4f})"
         ax.plot(fpr, tpr, label=label, **style_map[model_name])
 
     ax.plot([0, 1], [0, 1], "k--", linewidth=1.0, label="Chance")
@@ -512,7 +565,7 @@ def plot_confusion_matrices(
 
 
 def main() -> None:
-    """Run threshold tuning and improved evaluation without modifying the original script."""
+    """Run hyperparameter tuning, threshold tuning, and final evaluation."""
 
     df = load_data()
     X, y = split_features_and_target(df)
@@ -536,8 +589,20 @@ def main() -> None:
 
     cv_strategy = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
 
+    tuned_model_params = tune_base_model_hyperparameters(
+        numerical_features=numerical_features,
+        categorical_features=categorical_features,
+        X_train_fit=X_train_fit,
+        y_train_fit=y_train_fit,
+    )
+
     print("Training base models on the inner train split and tuning thresholds on the validation split...")
-    validation_pipelines = build_weighted_models(numerical_features, categorical_features, y_train_fit)
+    validation_pipelines = build_weighted_models(
+        numerical_features,
+        categorical_features,
+        y_train_fit,
+        model_params=tuned_model_params,
+    )
     validation_probability_map = build_ensemble_probability_map(
         validation_pipelines,
         X_train_fit,
@@ -550,7 +615,12 @@ def main() -> None:
     print_threshold_tuning_table(tuning_table)
 
     print("\nRefitting on the full training data and evaluating on the untouched holdout test set...")
-    final_pipelines = build_weighted_models(numerical_features, categorical_features, y_train_full)
+    final_pipelines = build_weighted_models(
+        numerical_features,
+        categorical_features,
+        y_train_full,
+        model_params=tuned_model_params,
+    )
     final_probability_map = build_ensemble_probability_map(
         final_pipelines,
         X_train_full,

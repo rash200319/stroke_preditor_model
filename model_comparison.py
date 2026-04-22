@@ -7,28 +7,22 @@ import numpy as np
 import pandas as pd
 
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.base import clone
-from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.ensemble import VotingClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     ConfusionMatrixDisplay,
-    PrecisionRecallDisplay,
     RocCurveDisplay,
     accuracy_score,
-    auc,
     fbeta_score,
     confusion_matrix,
     f1_score,
-    precision_recall_curve,
     precision_score,
     recall_score,
     roc_auc_score,
 )
-from sklearn.model_selection import StratifiedKFold, cross_validate, train_test_split
+from sklearn.model_selection import StratifiedKFold, cross_validate, cross_val_predict, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
@@ -37,17 +31,30 @@ from xgboost import XGBClassifier
 warnings.filterwarnings("ignore")
 
 RANDOM_STATE = 42
-CLASSIFICATION_THRESHOLD = 0.15
-F2_THRESHOLD = 0.15
+CLASSIFICATION_THRESHOLD = 0.1
+F2_THRESHOLD = 0.12
 SCALE_POS_WEIGHT = 19.5
-THRESHOLD_GRID = np.arange(0.05, 0.96, 0.01)
-CALIBRATION_METHOD = "sigmoid"  # Platt scaling
-HARD_MINING_OVERSAMPLE_FACTOR = 1
-HARD_MINING_MAX_ADDED_RATIO = 0.10
-HARD_MINING_FP_CONFIDENCE = 0.80
-HARD_MINING_FN_CONFIDENCE = 0.20
-OVERFIT_GAP_ROC_AUC_WARNING = 0.03
-OVERFIT_GAP_PR_AUC_WARNING = 0.05
+
+# Ensemble settings
+SOFT_VOTING_WEIGHTS = {
+    "Logistic Regression": 0.5,
+    "Random Forest": 0.2,
+    "XGBoost": 0.3,
+}
+SOFT_VOTING_THRESHOLD = 0.35
+STACKING_THRESHOLD = 0.35
+RULE_BASED_LR_THRESHOLD = 0.30
+RULE_BASED_RF_NO_STROKE_THRESHOLD = 0.20
+RULE_BASED_XGB_THRESHOLD = 0.40
+
+# Model-specific thresholds
+MODEL_THRESHOLDS = {
+    "Logistic Regression": 0.1,
+    "Random Forest": 0.3,
+    "XGBoost": 0.4,
+    "Clinical Ensemble": 0.1,
+}
+
 TARGET_COLUMN = "stroke_event"
 LEAKAGE_COLUMNS = [
     "risk_score",
@@ -195,12 +202,11 @@ def build_models(
             (
                 "classifier",
                 RandomForestClassifier(
-                    n_estimators=200,
-                    max_depth=4,
-                    min_samples_split=40,
-                    min_samples_leaf=20,
+                    n_estimators=300,
+                    max_depth=None,
+                    min_samples_split=5,
+                    min_samples_leaf=2,
                     max_features="sqrt",
-                    class_weight="balanced",
                     random_state=RANDOM_STATE,
                     n_jobs=-1,
                 ),
@@ -218,15 +224,15 @@ def build_models(
             (
                 "classifier",
                 XGBClassifier(
-                    n_estimators=120,
-                    max_depth=2,
-                    learning_rate=0.03,
-                    subsample=0.7,
-                    colsample_bytree=0.6,
-                    min_child_weight=20,
-                    gamma=1.0,
-                    reg_alpha=0.5,
-                    reg_lambda=5.0,
+                    n_estimators=300,
+                    max_depth=3,
+                    learning_rate=0.05,
+                    subsample=0.8,
+                    colsample_bytree=0.8,
+                    min_child_weight=8,
+                    gamma=0.1,
+                    reg_alpha=0.1,
+                    reg_lambda=1.0,
                     scale_pos_weight=SCALE_POS_WEIGHT,
                     objective="binary:logistic",
                     eval_metric="logloss",
@@ -247,111 +253,27 @@ def build_models(
 def evaluate_model(
     name: str,
     pipeline: Pipeline,
-    X_train_full: pd.DataFrame,
-    X_train_fit: pd.DataFrame,
-    X_calibration: pd.DataFrame,
-    X_hard_mining: pd.DataFrame,
-    X_threshold: pd.DataFrame,
+    X_train: pd.DataFrame,
     X_test: pd.DataFrame,
-    y_train_full: pd.Series,
-    y_train_fit: pd.Series,
-    y_calibration: pd.Series,
-    y_hard_mining: pd.Series,
-    y_threshold: pd.Series,
+    y_train: pd.Series,
     y_test: pd.Series,
     cv_strategy: StratifiedKFold,
 ) -> dict[str, float | np.ndarray | Pipeline]:
     """Fit one pipeline, evaluate on the holdout set, and run stratified CV on training data only."""
 
-    threshold_model = clone(pipeline)
-    threshold_model.fit(X_train_fit, y_train_fit)
+    pipeline.fit(X_train, y_train)
 
-    inference_model: Pipeline | CalibratedClassifierCV = threshold_model
-    calibrated = False
-
-    # Calibrate XGBoost probabilities after fitting, then tune threshold on calibrated probabilities.
-    if name == "XGBoost":
-        inference_model = CalibratedClassifierCV(
-            estimator=threshold_model,
-            method=CALIBRATION_METHOD,
-            cv="prefit",
-        )
-        inference_model.fit(X_calibration, y_calibration)
-        calibrated = True
-
-    threshold_proba = inference_model.predict_proba(X_threshold)[:, 1]
-    tuned_threshold = CLASSIFICATION_THRESHOLD
-
-    threshold_pred = (threshold_proba >= tuned_threshold).astype(int)
-    tn, fp, fn, tp = confusion_matrix(y_threshold, threshold_pred).ravel()
-    threshold_summary = {
-        "false_positive_rate": float(fp / (fp + tn)) if (fp + tn) > 0 else 0.0,
-        "false_negative_rate": float(fn / (fn + tp)) if (fn + tp) > 0 else 0.0,
-        "objective": float((fp / (fp + tn)) + (fn / (fn + tp))) if (fp + tn) > 0 and (fn + tp) > 0 else 0.0,
-    }
-
-    hard_mining_proba = inference_model.predict_proba(X_hard_mining)[:, 1]
-    hard_mask, hard_fp_count, hard_fn_count = select_hard_examples(
-        y_hard_mining,
-        hard_mining_proba,
-        tuned_threshold,
-    )
-
-    X_train_final = X_train_full.copy()
-    y_train_final = y_train_full.copy()
-    hard_mined_count = int(np.sum(hard_mask))
-
-    if hard_mined_count > 0:
-        X_hard_cases = X_hard_mining.loc[hard_mask]
-        y_hard_cases = y_hard_mining.loc[hard_mask]
-
-        max_added_rows = max(1, int(len(X_train_full) * HARD_MINING_MAX_ADDED_RATIO))
-        max_selected_hard_cases = max(1, max_added_rows // max(1, HARD_MINING_OVERSAMPLE_FACTOR))
-
-        if len(X_hard_cases) > max_selected_hard_cases:
-            y_hard_array = y_hard_cases.to_numpy()
-            hard_confidence = np.where(y_hard_array == 0, hard_mining_proba[hard_mask], 1.0 - hard_mining_proba[hard_mask])
-            keep_idx = np.argsort(-hard_confidence)[:max_selected_hard_cases]
-            X_hard_cases = X_hard_cases.iloc[keep_idx]
-            y_hard_cases = y_hard_cases.iloc[keep_idx]
-            hard_mined_count = len(X_hard_cases)
-
-        X_train_final = pd.concat(
-            [X_train_final] + [X_hard_cases] * HARD_MINING_OVERSAMPLE_FACTOR,
-            axis=0,
-            ignore_index=True,
-        )
-        y_train_final = pd.concat(
-            [y_train_final] + [y_hard_cases] * HARD_MINING_OVERSAMPLE_FACTOR,
-            axis=0,
-            ignore_index=True,
-        )
-
-    if name == "XGBoost":
-        # Final calibrated XGBoost model after hard-negative mining retraining.
-        full_model_train = clone(pipeline)
-        full_model_train.fit(X_train_final, y_train_final)
-        inference_model = CalibratedClassifierCV(
-            estimator=full_model_train,
-            method=CALIBRATION_METHOD,
-            cv="prefit",
-        )
-        inference_model.fit(X_calibration, y_calibration)
-    else:
-        pipeline.fit(X_train_final, y_train_final)
-        inference_model = pipeline
-
-    y_proba = inference_model.predict_proba(X_test)[:, 1]
-    y_pred = (y_proba >= tuned_threshold).astype(int)
+    y_proba = pipeline.predict_proba(X_test)[:, 1]
+    # Use model-specific threshold
+    threshold = MODEL_THRESHOLDS.get(name, CLASSIFICATION_THRESHOLD)
+    y_pred = (y_proba >= threshold).astype(int)
     y_pred_custom = (y_proba >= F2_THRESHOLD).astype(int)
     f2 = fbeta_score(y_test, y_pred_custom, beta=2, zero_division=0)
-    pr_precision, pr_recall, _ = precision_recall_curve(y_test, y_proba)
-    pr_auc = auc(pr_recall, pr_precision)
 
     cv_scores = cross_validate(
         pipeline,
-        X_train_full,
-        y_train_full,
+        X_train,
+        y_train,
         cv=cv_strategy,
         scoring={
             "accuracy": "accuracy",
@@ -359,32 +281,15 @@ def evaluate_model(
             "recall": "recall",
             "f1": "f1",
             "roc_auc": "roc_auc",
-            "pr_auc": "average_precision",
         },
         n_jobs=-1,
-        return_train_score=True,
-    )
-
-    cv_train_roc_auc_mean = float(np.mean(cv_scores["train_roc_auc"]))
-    cv_train_pr_auc_mean = float(np.mean(cv_scores["train_pr_auc"]))
-    cv_roc_auc_mean = float(np.mean(cv_scores["test_roc_auc"]))
-    cv_pr_auc_mean = float(np.mean(cv_scores["test_pr_auc"]))
-
-    overfit_flag, roc_auc_gap, pr_auc_gap = detect_overfitting(
-        cv_train_roc_auc_mean,
-        cv_roc_auc_mean,
-        cv_train_pr_auc_mean,
-        cv_pr_auc_mean,
+        return_train_score=False,
     )
 
     return {
         "name": name,
-        "model": inference_model,
-        "calibrated": calibrated,
-        "threshold": tuned_threshold,
-        "hard_mined_count": hard_mined_count,
-        "hard_fp_count": hard_fp_count,
-        "hard_fn_count": hard_fn_count,
+        "model": pipeline,
+        "threshold": threshold,
         "y_pred": y_pred,
         "y_proba": y_proba,
         "accuracy": accuracy_score(y_test, y_pred),
@@ -393,7 +298,6 @@ def evaluate_model(
         "f1": f1_score(y_test, y_pred, zero_division=0),
         "f2": f2,
         "roc_auc": roc_auc_score(y_test, y_proba),
-        "pr_auc": pr_auc,
         "cv_accuracy_mean": float(np.mean(cv_scores["test_accuracy"])),
         "cv_accuracy_std": float(np.std(cv_scores["test_accuracy"])),
         "cv_precision_mean": float(np.mean(cv_scores["test_precision"])),
@@ -402,101 +306,137 @@ def evaluate_model(
         "cv_recall_std": float(np.std(cv_scores["test_recall"])),
         "cv_f1_mean": float(np.mean(cv_scores["test_f1"])),
         "cv_f1_std": float(np.std(cv_scores["test_f1"])),
-        "cv_roc_auc_mean": cv_roc_auc_mean,
+        "cv_roc_auc_mean": float(np.mean(cv_scores["test_roc_auc"])),
         "cv_roc_auc_std": float(np.std(cv_scores["test_roc_auc"])),
-        "cv_pr_auc_mean": cv_pr_auc_mean,
-        "cv_pr_auc_std": float(np.std(cv_scores["test_pr_auc"])),
-        "cv_train_roc_auc_mean": cv_train_roc_auc_mean,
-        "cv_train_pr_auc_mean": cv_train_pr_auc_mean,
-        "overfit_flag": overfit_flag,
-        "roc_auc_gap": roc_auc_gap,
-        "pr_auc_gap": pr_auc_gap,
-        "threshold_false_positive_rate": threshold_summary["false_positive_rate"],
-        "threshold_false_negative_rate": threshold_summary["false_negative_rate"],
-        "threshold_objective": threshold_summary["objective"],
     }
 
 
-def tune_threshold(
-    y_true: pd.Series,
-    y_proba: np.ndarray,
-    thresholds: np.ndarray = THRESHOLD_GRID,
-) -> tuple[float, dict[str, float]]:
-    """Find the threshold that minimizes the sum of false positive and false negative rates."""
-
-    best_threshold = 0.5
-    best_objective = float("inf")
-    best_summary = {
-        "false_positive_rate": 1.0,
-        "false_negative_rate": 1.0,
-        "objective": float("inf"),
-    }
-
-    for threshold in thresholds:
-        y_pred = (y_proba >= threshold).astype(int)
-        tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
-
-        false_positive_rate = fp / (fp + tn) if (fp + tn) > 0 else 0.0
-        false_negative_rate = fn / (fn + tp) if (fn + tp) > 0 else 0.0
-        objective = false_positive_rate + false_negative_rate
-
-        if objective < best_objective:
-            best_objective = objective
-            best_threshold = float(threshold)
-            best_summary = {
-                "false_positive_rate": float(false_positive_rate),
-                "false_negative_rate": float(false_negative_rate),
-                "objective": float(objective),
-            }
-
-    return best_threshold, best_summary
-
-
-def select_hard_examples(
-    y_true: pd.Series,
+def evaluate_predictions(
+    name: str,
+    y_test: pd.Series,
     y_proba: np.ndarray,
     threshold: float,
-) -> tuple[np.ndarray, int, int]:
-    """Select confidence-gated hard errors to reduce noise amplification."""
+) -> dict[str, float | np.ndarray]:
+    """Score a probability vector against the holdout set."""
 
-    y_array = y_true.to_numpy()
     y_pred = (y_proba >= threshold).astype(int)
 
-    hard_fp_mask = (y_pred == 1) & (y_array == 0) & (y_proba >= HARD_MINING_FP_CONFIDENCE)
-    hard_fn_mask = (y_pred == 0) & (y_array == 1) & (y_proba <= HARD_MINING_FN_CONFIDENCE)
-    hard_mask = hard_fp_mask | hard_fn_mask
-
-    return hard_mask, int(np.sum(hard_fp_mask)), int(np.sum(hard_fn_mask))
-
-
-def assert_disjoint_split_indices(split_map: dict[str, pd.DataFrame | pd.Series]) -> None:
-    """Ensure evaluation/tuning/mining/calibration splits are disjoint to avoid leakage."""
-
-    items = list(split_map.items())
-    for i in range(len(items)):
-        left_name, left_data = items[i]
-        left_idx = set(left_data.index)
-        for j in range(i + 1, len(items)):
-            right_name, right_data = items[j]
-            overlap = left_idx.intersection(set(right_data.index))
-            if overlap:
-                raise ValueError(
-                    f"Data leakage risk: splits '{left_name}' and '{right_name}' overlap by {len(overlap)} rows."
-                )
+    return {
+        "name": name,
+        "threshold": threshold,
+        "y_pred": y_pred,
+        "y_proba": y_proba,
+        "accuracy": accuracy_score(y_test, y_pred),
+        "precision": precision_score(y_test, y_pred, zero_division=0),
+        "recall": recall_score(y_test, y_pred, zero_division=0),
+        "f1": f1_score(y_test, y_pred, zero_division=0),
+        "f2": fbeta_score(y_test, y_pred, beta=2, zero_division=0),
+        "roc_auc": roc_auc_score(y_test, y_proba),
+    }
 
 
-def detect_overfitting(
-    cv_train_roc_auc_mean: float,
-    cv_roc_auc_mean: float,
-    cv_train_pr_auc_mean: float,
-    cv_pr_auc_mean: float,
-) -> tuple[bool, float, float]:
-    """Detect likely overfitting using train-vs-validation cross-validation gaps."""
+def soft_voting_probabilities(probabilities: dict[str, np.ndarray]) -> np.ndarray:
+    """Blend base-model probabilities with a weighted soft-voting rule."""
 
-    roc_auc_gap = cv_train_roc_auc_mean - cv_roc_auc_mean
-    pr_auc_gap = cv_train_pr_auc_mean - cv_pr_auc_mean
-    overfit_flag = (roc_auc_gap > OVERFIT_GAP_ROC_AUC_WARNING) or (pr_auc_gap > OVERFIT_GAP_PR_AUC_WARNING)
-    return overfit_flag, roc_auc_gap, pr_auc_gap
+    missing_models = [model_name for model_name in SOFT_VOTING_WEIGHTS if model_name not in probabilities]
+    if missing_models:
+        raise KeyError(f"Missing probability arrays for: {', '.join(missing_models)}")
+
+    weighted_sum = np.zeros_like(next(iter(probabilities.values())), dtype=float)
+    total_weight = 0.0
+
+    for model_name, weight in SOFT_VOTING_WEIGHTS.items():
+        weighted_sum += weight * probabilities[model_name]
+        total_weight += weight
+
+    return weighted_sum / total_weight
+
+
+def rule_based_hybrid_probabilities(probabilities: dict[str, np.ndarray]) -> np.ndarray:
+    """Apply a safety-biased rule-based clinical hybrid."""
+
+    lr_prob = probabilities["Logistic Regression"]
+    rf_prob = probabilities["Random Forest"]
+    xgb_prob = probabilities["XGBoost"]
+
+    final_prob = np.empty_like(lr_prob, dtype=float)
+
+    stroke_mask = lr_prob > RULE_BASED_LR_THRESHOLD
+    no_stroke_mask = rf_prob < RULE_BASED_RF_NO_STROKE_THRESHOLD
+    fallback_mask = ~(stroke_mask | no_stroke_mask)
+
+    final_prob[stroke_mask] = 1.0
+    final_prob[no_stroke_mask] = 0.0
+    final_prob[fallback_mask] = xgb_prob[fallback_mask]
+
+    return final_prob
+
+
+def build_stacking_features(
+    pipelines: dict[str, Pipeline],
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    cv_strategy: StratifiedKFold,
+    X_test: pd.DataFrame,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Construct out-of-fold stacking features for train and holdout data."""
+
+    train_columns = []
+    test_columns = []
+
+    for model_name in ["Logistic Regression", "Random Forest", "XGBoost"]:
+        pipeline = pipelines[model_name]
+        oof_proba = cross_val_predict(
+            pipeline,
+            X_train,
+            y_train,
+            cv=cv_strategy,
+            method="predict_proba",
+            n_jobs=-1,
+        )[:, 1]
+        pipeline.fit(X_train, y_train)
+        test_proba = pipeline.predict_proba(X_test)[:, 1]
+
+        train_columns.append(oof_proba)
+        test_columns.append(test_proba)
+
+    meta_train = np.column_stack(train_columns)
+    meta_test = np.column_stack(test_columns)
+    return meta_train, meta_test
+
+
+def evaluate_ensembles(
+    fitted_pipelines: dict[str, Pipeline],
+    base_probabilities: dict[str, np.ndarray],
+    X_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+    y_train: pd.Series,
+    y_test: pd.Series,
+    cv_strategy: StratifiedKFold,
+) -> list[dict[str, float | np.ndarray]]:
+    """Evaluate soft voting, stacking, and rule-based hybrid ensembles."""
+
+    ensemble_results: list[dict[str, float | np.ndarray]] = []
+
+    soft_voting_proba = soft_voting_probabilities(base_probabilities)
+    ensemble_results.append(
+        evaluate_predictions("Soft Voting Ensemble", y_test, soft_voting_proba, SOFT_VOTING_THRESHOLD)
+    )
+
+    meta_train, meta_test = build_stacking_features(fitted_pipelines, X_train, y_train, cv_strategy, X_test)
+    meta_model = LogisticRegression(max_iter=1000, class_weight="balanced", random_state=RANDOM_STATE)
+    meta_model.fit(meta_train, y_train)
+    stacking_proba = meta_model.predict_proba(meta_test)[:, 1]
+    ensemble_results.append(
+        evaluate_predictions("Stacking Ensemble", y_test, stacking_proba, STACKING_THRESHOLD)
+    )
+
+    rule_based_proba = rule_based_hybrid_probabilities(base_probabilities)
+    ensemble_results.append(
+        evaluate_predictions("Rule-Based Hybrid", y_test, rule_based_proba, 0.50)
+    )
+
+    return ensemble_results
 
 
 def print_results(results: list[dict[str, float | np.ndarray | Pipeline]]) -> None:
@@ -507,26 +447,12 @@ def print_results(results: list[dict[str, float | np.ndarray | Pipeline]]) -> No
             {
                 "Model": result["name"],
                 "Accuracy": result["accuracy"],
-                "ROC-AUC": result["roc_auc"],
-                "PR-AUC": result["pr_auc"],
                 "Precision": result["precision"],
                 "Recall": result["recall"],
                 "F1-score": result["f1"],
                 f"F2-score @ {F2_THRESHOLD:.2f}": result["f2"],
-                "Threshold": result["threshold"],
-                "Calibrated": result["calibrated"],
-                "Hard Mined": result["hard_mined_count"],
-                "Hard FP": result["hard_fp_count"],
-                "Hard FN": result["hard_fn_count"],
-                "Val FP Rate": result["threshold_false_positive_rate"],
-                "Val FN Rate": result["threshold_false_negative_rate"],
-                "CV Train ROC-AUC": result["cv_train_roc_auc_mean"],
-                "CV Train PR-AUC": result["cv_train_pr_auc_mean"],
-                "ROC Gap": result["roc_auc_gap"],
-                "PR Gap": result["pr_auc_gap"],
-                "Overfit Risk": result["overfit_flag"],
+                "ROC-AUC": result["roc_auc"],
                 "CV ROC-AUC": f"{result['cv_roc_auc_mean']:.4f} ± {result['cv_roc_auc_std']:.4f}",
-                "CV PR-AUC": f"{result['cv_pr_auc_mean']:.4f} ± {result['cv_pr_auc_std']:.4f}",
             }
             for result in results
         ]
@@ -540,6 +466,32 @@ def print_results(results: list[dict[str, float | np.ndarray | Pipeline]]) -> No
         f"\nBest model by holdout ROC-AUC: {best_result['name']} "
         f"({best_result['roc_auc']:.4f}) at threshold {best_result['threshold']:.2f}"
     )
+
+
+def print_ensemble_results(results: list[dict[str, float | np.ndarray]]) -> None:
+    """Print ensemble-specific metrics."""
+
+    if not results:
+        return
+
+    summary = pd.DataFrame(
+        [
+            {
+                "Model": result["name"],
+                "Accuracy": result["accuracy"],
+                "Precision": result["precision"],
+                "Recall": result["recall"],
+                "F1-score": result["f1"],
+                f"F2-score @ {F2_THRESHOLD:.2f}": result["f2"],
+                "ROC-AUC": result["roc_auc"],
+                "Threshold": result["threshold"],
+            }
+            for result in results
+        ]
+    )
+
+    print("\nEnsemble comparison on the 20% holdout test set")
+    print(summary.to_string(index=False, float_format=lambda value: f"{value:.4f}"))
 
 
 def extract_odds_ratios(logistic_pipeline: Pipeline, top_n: int = 20) -> pd.DataFrame:
@@ -582,14 +534,11 @@ def plot_results(
     results: list[dict[str, float | np.ndarray | Pipeline]],
     y_test: pd.Series,
 ) -> None:
-    """Create ROC/PR curves, metric comparison bars, and confusion matrices."""
+    """Create ROC curves, metric comparison bars, and confusion matrices."""
 
-    n_models = len(results)
-    n_cols = max(3, n_models)
-
-    fig = plt.figure(figsize=(6 * n_cols, 12))
+    fig = plt.figure(figsize=(20, 12))
     fig.suptitle("Model Comparison - Stroke Prediction", fontsize=16, fontweight="bold", y=1.01)
-    grid = gridspec.GridSpec(2, n_cols, figure=fig, hspace=0.4, wspace=0.35)
+    grid = gridspec.GridSpec(2, 3, figure=fig, hspace=0.4, wspace=0.35)
 
     colors = ["#4C72B0", "#55A868", "#DD8452"]
     model_names = [result["name"] for result in results]
@@ -607,23 +556,9 @@ def plot_results(
     ax_roc.set_title("ROC Curves - All Models")
     ax_roc.legend(fontsize=8)
 
-    ax_pr = fig.add_subplot(grid[0, 1])
-    baseline_pr = float(y_test.mean())
-    for result, color in zip(results, colors):
-        PrecisionRecallDisplay.from_predictions(
-            y_test,
-            result["y_proba"],
-            ax=ax_pr,
-            name=f"{result['name']} (AUC={result['pr_auc']:.4f})",
-            color=color,
-        )
-    ax_pr.axhline(y=baseline_pr, color="k", linestyle="--", linewidth=0.8, label="Baseline")
-    ax_pr.set_title("Precision-Recall Curves")
-    ax_pr.legend(fontsize=8)
-
-    ax_bar = fig.add_subplot(grid[0, 2])
-    metric_keys = ["roc_auc", "pr_auc", "recall", "f2"]
-    metric_labels = ["ROC-AUC", "PR-AUC", "Recall", f"F2@{F2_THRESHOLD:.2f}"]
+    ax_bar = fig.add_subplot(grid[0, 1])
+    metric_keys = ["accuracy", "precision", "recall", "f1", "roc_auc"]
+    metric_labels = ["Accuracy", "Precision", "Recall", "F1", "ROC-AUC"]
     x_positions = np.arange(len(metric_keys))
     bar_width = 0.25
 
@@ -640,9 +575,36 @@ def plot_results(
     ax_bar.set_xticks(x_positions + bar_width)
     ax_bar.set_xticklabels(metric_labels)
     ax_bar.set_ylim(0.0, 1.05)
-    ax_bar.set_title("Imbalance-Aware Metric Comparison")
+    ax_bar.set_title("Holdout Metric Comparison")
     ax_bar.set_ylabel("Score")
     ax_bar.legend(fontsize=8)
+
+    ax_cv = fig.add_subplot(grid[0, 2])
+    cv_means = [result["cv_roc_auc_mean"] for result in results]
+    cv_stds = [result["cv_roc_auc_std"] for result in results]
+    bars = ax_cv.bar(
+        model_names,
+        cv_means,
+        yerr=cv_stds,
+        capsize=6,
+        color=colors,
+        alpha=0.85,
+        error_kw={"linewidth": 2},
+    )
+    ax_cv.set_ylim(0.0, 1.05)
+    ax_cv.set_title("5-Fold CV ROC-AUC (Mean ± Std)")
+    ax_cv.set_ylabel("ROC-AUC")
+    for bar, mean in zip(bars, cv_means):
+        ax_cv.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 0.01,
+            f"{mean:.4f}",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+            fontweight="bold",
+        )
+    ax_cv.tick_params(axis="x", labelsize=9)
 
     for index, result in enumerate(results):
         ax_cm = fig.add_subplot(grid[1, index])
@@ -677,106 +639,43 @@ def main() -> None:
         stratify=y,
     )
 
-    X_train_fit, X_threshold, y_train_fit, y_threshold = train_test_split(
-        X_train,
-        y_train,
-        test_size=0.2,
-        random_state=RANDOM_STATE,
-        stratify=y_train,
-    )
-
-    X_calibration, X_tune_pool, y_calibration, y_tune_pool = train_test_split(
-        X_threshold,
-        y_threshold,
-        test_size=2 / 3,
-        random_state=RANDOM_STATE,
-        stratify=y_threshold,
-    )
-
-    X_hard_mining, X_threshold, y_hard_mining, y_threshold = train_test_split(
-        X_tune_pool,
-        y_tune_pool,
-        test_size=0.5,
-        random_state=RANDOM_STATE,
-        stratify=y_tune_pool,
-    )
-
-    assert_disjoint_split_indices(
-        {
-            "train_fit": X_train_fit,
-            "calibration": X_calibration,
-            "hard_mining": X_hard_mining,
-            "threshold_tuning": X_threshold,
-            "test": X_test,
-        }
-    )
-
     cv_strategy = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
     model_pipelines = build_models(numerical_features, categorical_features)
 
-    print("Building the Clinical Voting Ensemble...")
-
-    lr_pipeline = model_pipelines["Logistic Regression"]
-    rf_pipeline = model_pipelines["Random Forest"]
-    xgb_pipeline = model_pipelines["XGBoost"]
-
-    ensemble_pipeline = VotingClassifier(
-        estimators=[
-            ("LR", lr_pipeline),
-            ("RF", rf_pipeline),
-            ("XGB", xgb_pipeline),
-        ],
-        voting="soft",
-        weights=[2, 1, 1],
-    )
-
-    model_pipelines["Clinical Ensemble"] = ensemble_pipeline
-
     print(
         "Data loaded. Training leakage-safe pipelines on the stratified train split...\n"
-        "XGBoost uses Platt scaling calibration (sigmoid) before fixed-threshold evaluation.\n"
-        f"Using a fixed classification threshold for all models: {CLASSIFICATION_THRESHOLD:.2f}.\n"
-        "Hard negative mining: only high-confidence wrong cases are used, with mild capped oversampling.\n"
+        "Using model-specific classification thresholds:\n"
+        f"  - Logistic Regression: {MODEL_THRESHOLDS['Logistic Regression']:.2f}\n"
+        f"  - Random Forest: {MODEL_THRESHOLDS['Random Forest']:.2f}\n"
+        f"  - XGBoost: {MODEL_THRESHOLDS['XGBoost']:.2f}\n"
     )
 
     results = []
     for name, pipeline in model_pipelines.items():
         print(f"Training {name}...")
-        result = evaluate_model(
-            name,
-            pipeline,
-            X_train,
-            X_train_fit,
-            X_calibration,
-            X_hard_mining,
-            X_threshold,
-            X_test,
-            y_train,
-            y_train_fit,
-            y_calibration,
-            y_hard_mining,
-            y_threshold,
-            y_test,
-            cv_strategy,
-        )
+        result = evaluate_model(name, pipeline, X_train, X_test, y_train, y_test, cv_strategy)
         results.append(result)
         print(
-            f"  ROC-AUC={result['roc_auc']:.4f}  PR-AUC={result['pr_auc']:.4f}  "
-            f"Recall={result['recall']:.4f}  F1={result['f1']:.4f}  "
-            f"F2@{F2_THRESHOLD:.2f}={result['f2']:.4f}  "
-            f"thr={result['threshold']:.2f}  hard_mined={result['hard_mined_count']} "
-            f"(FP={result['hard_fp_count']}, FN={result['hard_fn_count']})  "
-            f"gaps(ROC={result['roc_auc_gap']:.4f}, PR={result['pr_auc_gap']:.4f})\n"
+            f"  ROC-AUC={result['roc_auc']:.4f}  Recall={result['recall']:.4f}  "
+            f"F1={result['f1']:.4f}  F2@{F2_THRESHOLD:.2f}={result['f2']:.4f}  "
+            f"threshold={result['threshold']:.2f}\n"
         )
-
-        if result["overfit_flag"]:
-            print(
-                "  [warning] Potential overfitting detected from train-vs-CV gaps. "
-                "Consider stronger regularization or reducing model complexity.\n"
-            )
 
     print_results(results)
     plot_results(results, y_test)
+
+    fitted_pipelines = {result["name"]: result["model"] for result in results}
+    base_probabilities = {result["name"]: result["y_proba"] for result in results}
+    ensemble_results = evaluate_ensembles(
+        fitted_pipelines,
+        base_probabilities,
+        X_train,
+        X_test,
+        y_train,
+        y_test,
+        cv_strategy,
+    )
+    print_ensemble_results(ensemble_results)
 
     logistic_result = next((result for result in results if result["name"] == "Logistic Regression"), None)
     if logistic_result is not None:

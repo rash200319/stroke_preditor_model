@@ -46,7 +46,7 @@ def add_interaction_features(df: pd.DataFrame) -> pd.DataFrame:
     df_out["age_x_heart"] = df_out["age"] * df_out["has_heart_disease"]
     df_out["glucose_x_hypertension"] = df_out["glucose_level"] * df_out["has_hypertension"]
     df_out["age_risk_score"] = df_out["age"] * (
-        df_out["has_hypertension"] + df_out["has_hypertension"]
+        df_out["has_hypertension"] + df_out["has_heart_disease"]
     )
     return df_out
 

@@ -146,7 +146,7 @@ def smote(X, y, sampling_strategy=0.35, k=5, random_state=RANDOM_STATE):
 def make_logistic(spw):
     # spw not used directly — class_weight='balanced' handles it
     return LogisticRegression(
-        C=0.1, max_iter=2000, solver="lbfgs",
+        C=0.5, max_iter=2000, solver="lbfgs",
         class_weight="balanced", random_state=RANDOM_STATE
     )
 
@@ -174,10 +174,10 @@ def make_xgboost(spw):
 # ══════════════════════════════════════════════════════════════════
 # STEP 5 — THRESHOLD TUNING
 # ══════════════════════════════════════════════════════════════════
-def tune_threshold(y_true, y_proba, min_precision=0.10):
+def tune_threshold(y_true, y_proba, min_precision=0.08):
     """
     Maximise recall subject to precision >= min_precision.
-    min_precision=0.10 means: for every 10 patients flagged,
+    min_precision=0.08 means: for every 12 patients flagged,
     at least 1 must be a real stroke — acceptable for screening.
     """
     best_thr, best_recall = 0.5, 0.0
@@ -331,7 +331,7 @@ def main():
     thresholds = {}
     all_names  = list(BASE_FNS.keys()) + ["Soft Voting", "Stacking"]
     for name in all_names:
-        thr = tune_threshold(y_val.values, val_probas[name], min_precision=0.10)
+        thr = tune_threshold(y_val.values, val_probas[name], min_precision=0.08)
         thresholds[name] = thr
         r   = evaluate(name, y_val.values, val_probas[name], thr)
         print(f"  {name:<22} thr={thr:.2f}  "
@@ -522,8 +522,8 @@ def main():
     ax3.plot(thrs, f1s,   label="F1",        color="seagreen",  linewidth=2.2)
     ax3.axvline(thresholds["Stacking"], color="black", linestyle="--",
                 linewidth=1.5, label=f"Chosen thr={thresholds['Stacking']:.2f}")
-    ax3.axhline(0.15, color="orange", linestyle=":", linewidth=1,
-                label="Min precision floor (0.15)")
+    ax3.axhline(0.08, color="orange", linestyle=":", linewidth=1,
+                label="Min precision floor (0.08)")
     ax3.set_title("Stacking Ensemble — Threshold Sweep on Test Set")
     ax3.set_xlabel("Threshold")
     ax3.set_ylabel("Score")

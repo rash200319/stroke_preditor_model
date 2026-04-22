@@ -29,6 +29,7 @@ from xgboost import XGBClassifier
 warnings.filterwarnings("ignore")
 
 RANDOM_STATE = 42
+CLASSIFICATION_THRESHOLD = 0.6
 TARGET_COLUMN = "stroke_event"
 LEAKAGE_COLUMNS = [
     "risk_score",
@@ -198,8 +199,8 @@ def evaluate_model(
 
     pipeline.fit(X_train, y_train)
 
-    y_pred = pipeline.predict(X_test)
     y_proba = pipeline.predict_proba(X_test)[:, 1]
+    y_pred = (y_proba >= CLASSIFICATION_THRESHOLD).astype(int)
 
     cv_scores = cross_validate(
         pipeline,
@@ -264,7 +265,7 @@ def print_results(results: list[dict[str, float | np.ndarray | Pipeline]]) -> No
     best_result = max(results, key=lambda item: item["roc_auc"])
     print(
         f"\nBest model by holdout ROC-AUC: {best_result['name']} "
-        f"({best_result['roc_auc']:.4f})"
+        f"({best_result['roc_auc']:.4f}) at threshold {CLASSIFICATION_THRESHOLD:.2f}"
     )
 
 
@@ -380,7 +381,10 @@ def main() -> None:
     cv_strategy = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
     model_pipelines = build_models(numerical_features, categorical_features)
 
-    print("Data loaded. Training leakage-safe pipelines on the stratified train split...\n")
+    print(
+        "Data loaded. Training leakage-safe pipelines on the stratified train split...\n"
+        f"Using classification threshold: {CLASSIFICATION_THRESHOLD:.2f}\n"
+    )
 
     results = []
     for name, pipeline in model_pipelines.items():

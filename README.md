@@ -13,6 +13,7 @@ The project evolved from an earlier balanced setup into a more realistic medical
 - `healthcare_data_cleaned.csv` - cleaned dataset exported by `final_clean.py`.
 - `final_clean.py` - deduplicates records, imputes BMI, adds clinically useful interaction features, and saves the cleaned dataset.
 - `final_stroke_ensemble.py` - final ensemble training script with threshold tuning, stacking, and test-set evaluation.
+- `visualization_report.py` - standalone script that generates polished EDA figures, statistical-test visuals, and a markdown report.
 - `label_shuffle_test.py` - sanity check to confirm the pipeline is not leaking label information.
 - `stroke_ensemble_roc_pr_fi.png` - ROC, precision-recall, and XGBoost feature importance plot.
 - `stroke_ensemble_confusion.png` - confusion matrices for all tuned models.
@@ -131,6 +132,18 @@ Running `final_stroke_ensemble.py` produces:
 - `stroke_ensemble_confusion.png`
 - `stroke_ensemble_threshold_sweep.png`
 
+Running `visualization_report.py` produces:
+
+- `visuals/01_class_balance.png`
+- `visuals/02_numeric_distributions.png`
+- `visuals/03_categorical_counts.png`
+- `visuals/04_boxplots.png`
+- `visuals/05_correlation_heatmap.png`
+- `visuals/06_statistical_tests.png`
+- `visuals/07_model_metric_heatmap.png`
+- `visuals/08_xgb_feature_importance.png`
+- `visuals/visualization_report.md`
+
 ## Leakage Check
 
 `label_shuffle_test.py` was used as a sanity check. When labels are shuffled, the models drop to chance-level performance, which supports the claim that the pipeline is not trivially leaking target information.
@@ -169,6 +182,12 @@ Run the label shuffle sanity check:
 
 ```bash
 python label_shuffle_test.py
+```
+
+Generate the standalone visuals and report:
+
+```bash
+python visualization_report.py
 ```
 
 ## Notes

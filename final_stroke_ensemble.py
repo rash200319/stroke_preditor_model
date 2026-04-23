@@ -20,27 +20,15 @@ Pipeline per model:
 ══════════════════════════════════════════════════════════════════
 """
 import warnings
-import sys
-import os
 import numpy as np
 import pandas as pd
-import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 warnings.filterwarnings("ignore")
 
-os.environ.setdefault("LOKY_MAX_CPU_COUNT", "1")
-
-try:
-    sys.stdout.reconfigure(encoding="utf-8")
-except Exception:
-    pass
-
 from sklearn.model_selection import (
     train_test_split, StratifiedKFold, cross_val_score
 )
-from sklearn.calibration import CalibratedClassifierCV
 from sklearn.preprocessing import LabelEncoder
 from sklearn.neighbors import NearestNeighbors
 from sklearn.linear_model import LogisticRegression
@@ -72,7 +60,7 @@ def load_data(path="healthcare_data.csv"):
     before = len(df)
     dedup_cols = [c for c in df.columns if c != "patient_id"]
     df = df.drop_duplicates(subset=dedup_cols).reset_index(drop=True)
-    print(f"Rows  : {before} -> {len(df)}  ({before - len(df)} duplicates removed)")
+    print(f"Rows  : {before} → {len(df)}  ({before - len(df)} duplicates removed)")
 
     DROP = ["patient_id", "age_group", "bmi_category",
             "high_glucose", "risk_score", "lifestyle_risk"]
@@ -214,11 +202,10 @@ def make_random_forest(spw):
         n_estimators=400, max_depth=10,
         min_samples_split=5, min_samples_leaf=3,
         max_features="sqrt", class_weight="balanced",
-        random_state=RANDOM_STATE, n_jobs=1
+        random_state=RANDOM_STATE, n_jobs=-1
     )
 
-def make_xgboost(spw, use_early_stopping=True):
-    early_stopping_rounds = 30 if use_early_stopping else None
+def make_xgboost(spw):
     return XGBClassifier(
         n_estimators=500, max_depth=4,
         learning_rate=0.05, subsample=0.8,
@@ -226,8 +213,8 @@ def make_xgboost(spw, use_early_stopping=True):
         gamma=0.2, reg_alpha=0.5, reg_lambda=2.0,
         scale_pos_weight=spw,
         objective="binary:logistic", eval_metric="aucpr",
-        early_stopping_rounds=early_stopping_rounds,
-        random_state=RANDOM_STATE, n_jobs=1
+        early_stopping_rounds=30,
+        random_state=RANDOM_STATE, n_jobs=-1
     )
 
 
@@ -238,7 +225,7 @@ def tune_threshold(y_true, y_proba, min_precision=0.08, objective="recall"):
     """
     Tune a probability threshold for either recall-first or balanced behavior.
     min_precision=0.08 means: for every 12 patients flagged,
-    at least 1 must be a real stroke -> acceptable for screening.
+    at least 1 must be a real stroke ? acceptable for screening.
     """
     best_thr = 0.5
     best_score = -1.0
@@ -268,17 +255,6 @@ def tune_thresholds_by_mode(y_true, y_proba):
             objective=config["objective"],
         )
     return tuned
-
-
-def find_optimal_threshold(y_true, y_proba):
-    """Find the threshold that maximizes the F1-score."""
-    thresholds = np.linspace(0, 1, 100)
-    f1_scores = [
-        f1_score(y_true, (y_proba >= t).astype(int), zero_division=0)
-        for t in thresholds
-    ]
-    best_thr = thresholds[int(np.argmax(f1_scores))]
-    return round(float(best_thr), 3)
 
 
 def build_oof_meta_features(base_models_fn, X_tr, y_tr, spw,
@@ -418,7 +394,7 @@ def main():
     val_probas["Stacking"] = meta_lr.predict_proba(oof_val)[:, 1]
 
     # ── Tune thresholds on validation ─────────────────────────────
-    print("\n->->->->->-> Tuning thresholds on validation set ->->->->->->")
+    print("\n?????? Tuning thresholds on validation set ??????")
     thresholds = {mode: {} for mode in THRESHOLD_MODES}
     all_names  = list(BASE_FNS.keys()) + ["Soft Voting", "Stacking"]
     for mode, config in THRESHOLD_MODES.items():
@@ -443,32 +419,20 @@ def main():
 
     final_models  = {}
     test_probas   = {}
-    xgb_base_model = None
 
     for name, fn in BASE_FNS.items():
-        base_model = fn(spw_full)
+        model = fn(spw_full)
         if name == "XGBoost":
             Xf_tr2, Xf_es, yf_tr2, yf_es = train_test_split(
                 X_full_sm, y_full_sm,
                 test_size=0.12, random_state=RANDOM_STATE, stratify=y_full_sm
             )
-            base_model.fit(Xf_tr2, yf_tr2, eval_set=[(Xf_es, yf_es)], verbose=50)
+            model.fit(Xf_tr2, yf_tr2, eval_set=[(Xf_es, yf_es)], verbose=50)
         else:
-            base_model.fit(X_full_sm, y_full_sm)
-
-        calibration_model = (
-            make_xgboost(spw_full, use_early_stopping=False)
-            if name == "XGBoost"
-            else base_model
-        )
-        calibrated_model = CalibratedClassifierCV(calibration_model, method="isotonic", cv=3)
-        calibrated_model.fit(X_full_sm, y_full_sm)
-
-        final_models[name] = calibrated_model
-        test_probas[name] = calibrated_model.predict_proba(X_test_p)[:, 1]
-        if name == "XGBoost":
-            xgb_base_model = base_model
-        print(f"  Trained & Calibrated {name}")
+            model.fit(X_full_sm, y_full_sm)
+        final_models[name] = model
+        test_probas[name] = model.predict_proba(X_test_p)[:, 1]
+        print(f"  Trained {name}")
 
     test_probas["Soft Voting"] = np.mean([test_probas[n] for n in BASE_FNS], axis=0)
 
@@ -481,56 +445,40 @@ def main():
     meta_lr_full.fit(oof_full_tr, y_train_full.values)
     test_probas["Stacking"] = meta_lr_full.predict_proba(oof_test)[:, 1]
 
-    results = {}
-    thresholds_test = {}
-    for name in all_names:
-        best_t = find_optimal_threshold(y_test.values, test_probas[name])
-        thresholds_test[name] = best_t
-        results[name] = evaluate(
-            name,
-            y_test.values,
-            test_probas[name],
-            best_t,
-        )
+    results_by_mode = {}
+    for mode in THRESHOLD_MODES:
+        results_by_mode[mode] = {}
+        for name in all_names:
+            results_by_mode[mode][name] = evaluate(
+                name,
+                y_test.values,
+                test_probas[name],
+                thresholds[mode][name],
+            )
 
-    print("\n" + "=" * 80)
-    print("  FINAL TEST SET RESULTS  (optimized threshold per model)")
-    print("=" * 80)
-    hdr = f"{'Model':<24} {'Thr':>5} {'AUC-ROC':>8} {'AUC-PR':>8} {'Recall':>8} {'Precision':>10} {'F1':>8}"
-    print(hdr)
-    print("-" * 80)
-    for name in all_names:
-        r = results[name]
-        flag = " ->->->->->->->" if name == "Stacking" else ""
-        print(f"{name:<24} {r['threshold']:>5.2f} {r['roc_auc']:>8.4f} "
-              f"{r['avg_prec']:>8.4f} {r['recall']:>8.4f} "
-              f"{r['precision']:>10.4f} {r['f1']:>8.4f}{flag}")
-    print("=" * 80)
+    for mode in THRESHOLD_MODES:
+        print("\n" + "=" * 80)
+        print(f"  FINAL TEST SET RESULTS  ({mode} mode)")
+        print("=" * 80)
+        hdr = f"{'Model':<24} {'Thr':>5} {'AUC-ROC':>8} {'AUC-PR':>8} {'Recall':>8} {'Precision':>10} {'F1':>8}"
+        print(hdr)
+        print("-" * 80)
+        for name in all_names:
+            r = results_by_mode[mode][name]
+            flag = " â˜…" if name == "Stacking" else ""
+            print(f"{name:<24} {r['threshold']:>5.2f} {r['roc_auc']:>8.4f} "
+                  f"{r['avg_prec']:>8.4f} {r['recall']:>8.4f} "
+                  f"{r['precision']:>10.4f} {r['f1']:>8.4f}{flag}")
+        print("=" * 80)
 
-    active_results = results
-    active_thresholds = thresholds_test
+    active_results = results_by_mode[ACTIVE_THRESHOLD_MODE]
+    active_thresholds = thresholds[ACTIVE_THRESHOLD_MODE]
 
-    xgb_model = xgb_base_model if xgb_base_model is not None else final_models["XGBoost"]
+    xgb_model = final_models["XGBoost"]
     imp = pd.Series(xgb_model.feature_importances_,
                     index=feat_names).sort_values(ascending=False)
     print("\nXGBoost Feature Importance:")
     print(imp.to_string())
-
-    try:
-        import shap
-
-        explainer = shap.TreeExplainer(xgb_model)
-        shap_values = explainer.shap_values(X_test_p)
-        plt.figure()
-        shap.summary_plot(shap_values, X_test_p, feature_names=feat_names, show=False)
-        plt.tight_layout()
-        plt.savefig("stroke_shap_summary.png", bbox_inches="tight", dpi=150)
-        plt.close()
-        print("Figure 4 saved -> stroke_shap_summary.png")
-    except ImportError:
-        print("SHAP is not installed; skipping stroke_shap_summary.png")
-    except Exception as exc:
-        print(f"SHAP summary skipped: {exc}")
 
     # ══════════════════════════════════════════════════════════════
     # PLOTS
@@ -595,7 +543,7 @@ def main():
     plt.tight_layout()
     plt.savefig("stroke_ensemble_roc_pr_fi.png", dpi=150, bbox_inches="tight")
     plt.show()
-    print("\nFigure 1 saved -> stroke_ensemble_roc_pr_fi.png")
+    print("\nFigure 1 saved → stroke_ensemble_roc_pr_fi.png")
 
     # ── Figure 2: Confusion Matrices (all 5 models) ───────────────
     fig2, axes2 = plt.subplots(2, 3, figsize=(18, 11))
@@ -621,7 +569,7 @@ def main():
     plt.tight_layout()
     plt.savefig("stroke_ensemble_confusion.png", dpi=150, bbox_inches="tight")
     plt.show()
-    print("Figure 2 saved -> stroke_ensemble_confusion.png")
+    print("Figure 2 saved → stroke_ensemble_confusion.png")
 
     # ── Figure 3: Threshold sweep for Stacking model ──────────────
     fig3, ax3 = plt.subplots(figsize=(10, 5))
@@ -649,7 +597,7 @@ def main():
     plt.tight_layout()
     plt.savefig("stroke_ensemble_threshold_sweep.png", dpi=150, bbox_inches="tight")
     plt.show()
-    print("Figure 3 saved -> stroke_ensemble_threshold_sweep.png")
+    print("Figure 3 saved → stroke_ensemble_threshold_sweep.png")
 
 
 if __name__ == "__main__":

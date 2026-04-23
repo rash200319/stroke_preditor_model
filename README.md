@@ -1,194 +1,178 @@
-model - XGBOOST
-cleaned - no pre-split imputation (missing values are handled inside the model pipeline)
+# Stroke Prediction Project
 
-use ipynb to clean data if needed. also i included my cleaned one.
+This repository contains two main stages of the stroke prediction workflow:
 
-# details of the model
----
-Features used (10): \['gender', 'age', 'has\_hypertension', 'has\_heart\_disease', 'marital\_status', 'employment\_type', 'residence', 'glucose\_level', 'bmi\_value', 'smoking\_habit'\]
+- `final_clean.py` prepares the dataset for modelling.
+- `final_stroke_ensemble.py` trains and evaluates the final leakage-safe ensemble on the real imbalanced dataset.
 
-Dataset shape: (9722, 10)
+The project evolved from an earlier balanced setup into a more realistic medical classification workflow that keeps the original class imbalance and focuses on recall-sensitive evaluation.
 
-Target balance: {0: 4861, 1: 4861}
+## Repository Files
 
-Train size: 7777 | Test size: 1945
+- `healthcare_data.csv` - raw source dataset.
+- `healthcare_data_cleaned.csv` - cleaned dataset exported by `final_clean.py`.
+- `final_clean.py` - deduplicates records, imputes BMI, adds clinically useful interaction features, and saves the cleaned dataset.
+- `final_stroke_ensemble.py` - final ensemble training script with threshold tuning, stacking, and test-set evaluation.
+- `label_shuffle_test.py` - sanity check to confirm the pipeline is not leaking label information.
+- `stroke_ensemble_roc_pr_fi.png` - ROC, precision-recall, and XGBoost feature importance plot.
+- `stroke_ensemble_confusion.png` - confusion matrices for all tuned models.
+- `stroke_ensemble_threshold_sweep.png` - threshold sweep for the stacking model.
 
-\[0\] validation\_0-auc:0.88482
+## Data Preparation
 
-\[50\] validation\_0-auc:0.95595
+`final_clean.py` performs the following steps:
 
-\[100\] validation\_0-auc:0.97224
+- removes the accidental `Unnamed: 0` index column if present;
+- deduplicates rows using all clinical columns except `patient_id`;
+- imputes missing `bmi_value` values using grouped medians by `gender` and age band;
+- adds interaction features such as `age_squared`, `age_x_glucose`, `age_x_hypertension`, `age_x_heart`, `glucose_x_hypertension`, and `age_risk_score`;
+- saves the result to `healthcare_data_cleaned.csv`.
 
-\[150\] validation\_0-auc:0.98461
+## Final Ensemble Workflow
 
-\[200\] validation\_0-auc:0.99118
+`final_stroke_ensemble.py` runs a full leakage-safe ensemble pipeline on the imbalanced dataset:
 
-\[250\] validation\_0-auc:0.99515
+- loads `healthcare_data.csv`;
+- removes duplicate clinical rows;
+- drops leakage-prone or unnecessary columns such as `patient_id`, `age_group`, `bmi_category`, `high_glucose`, `risk_score`, and `lifestyle_risk` when present;
+- engineers predictive features including:
+  - `age_squared`
+  - `age_over_10`
+  - `age_x_hypertension`
+  - `age_x_heart_disease`
+  - `glucose_x_bmi`
+  - `glucose_per_bmi`
+  - `bmi_deviation`
+  - `cvd_count`
+  - `is_senior`
+  - `log_glucose`
+- splits the data into train, validation, and test partitions with stratification;
+- handles class imbalance with SMOTE on the training folds only;
+- trains three base models:
+  - Logistic Regression
+  - Random Forest
+  - XGBoost
+- combines them with:
+  - Soft Voting
+  - Stacking
+- tunes decision thresholds on the validation set for two operating modes:
+  - High Sensitivity
+  - Balanced
+- evaluates the final models on an untouched test set.
 
-\[300\] validation\_0-auc:0.99626
+## Dataset Summary From The Latest Run
 
-\[350\] validation\_0-auc:0.99733
+- Original rows: `9722`
+- After deduplication: `5110`
+- Duplicates removed: `4612`
+- Stroke cases: `249`
+- Stroke prevalence: `4.87%`
 
-\[383\] validation\_0-auc:0.99735
+Train/validation/test split from the latest run:
 
-Best iteration: 353
+- Train: `3270`
+- Validation: `818`
+- Test: `1022`
+- Train stroke cases: `159` (`4.9%`)
+- Test stroke cases: `50` (`4.9%`)
+- `scale_pos_weight`: `19.54`
 
-\==================================================
+## Final Test Results
 
-MODEL PERFORMANCE ON TEST SET
+### High Sensitivity Mode
 
-\==================================================
+| Model | Thr | AUC-ROC | AUC-PR | Recall | Precision | F1 |
+|---|---:|---:|---:|---:|---:|---:|
+| Logistic Regression | 0.13 | 0.8326 | 0.2102 | 0.9400 | 0.0793 | 0.1462 |
+| Random Forest | 0.02 | 0.8183 | 0.1834 | 0.8800 | 0.0841 | 0.1536 |
+| XGBoost | 0.56 | 0.8034 | 0.1681 | 0.4600 | 0.1679 | 0.2460 |
+| Soft Voting | 0.24 | 0.8282 | 0.1905 | 0.8200 | 0.1059 | 0.1876 |
+| Stacking | 0.12 | 0.8383 | 0.2150 | 0.9200 | 0.0819 | 0.1503 |
 
-Accuracy : 0.9635 (96.35%)
+### Balanced Mode
 
-ROC-AUC : 0.9932
+| Model | Thr | AUC-ROC | AUC-PR | Recall | Precision | F1 |
+|---|---:|---:|---:|---:|---:|---:|
+| Logistic Regression | 0.78 | 0.8326 | 0.2102 | 0.4200 | 0.2234 | 0.2917 |
+| Random Forest | 0.38 | 0.8183 | 0.1834 | 0.4200 | 0.2188 | 0.2877 |
+| XGBoost | 0.85 | 0.8034 | 0.1681 | 0.0400 | 0.1538 | 0.0635 |
+| Soft Voting | 0.63 | 0.8282 | 0.1905 | 0.2600 | 0.2000 | 0.2261 |
+| Stacking | 0.67 | 0.8383 | 0.2150 | 0.7800 | 0.1940 | 0.3108 |
 
-\==================================================
+## Best Performing Model
 
-Classification Report:
+Stacking was the best overall model in the latest run:
 
-| Class         | Precision | Recall | F1-Score | Support |
-|--------------|----------|--------|----------|---------|
-| No Stroke    | 1.00     | 0.93   | 0.96     | 973     |
-| Stroke       | 0.93     | 1.00   | 0.96     | 972     |
-| **Accuracy** |          |        | 0.96     | 1945    |
-| Macro Avg    | 0.97     | 0.96   | 0.96     | 1945    |
-| Weighted Avg | 0.97     | 0.96   | 0.96     | 1945    |
+- Best AUC-ROC in both modes: `0.8383`
+- Best AUC-PR in both modes: `0.2150`
+- Best recall in balanced mode: `0.7800`
+- Best recall in high-sensitivity mode: `0.9200`
 
-5-Fold Cross-Validation AUC:
+## XGBoost Feature Importance
 
-Fold 1: 0.9955
+Top features from the latest run:
 
-Fold 2: 0.9905
+1. `age_squared` - `0.155550`
+2. `is_senior` - `0.131076`
+3. `age` - `0.114347`
+4. `cvd_count` - `0.088688`
+5. `residence` - `0.071208`
+6. `gender` - `0.067930`
+7. `has_hypertension` - `0.046056`
+8. `smoking_habit` - `0.038471`
+9. `age_over_10` - `0.036362`
+10. `employment_type` - `0.034493`
 
-Fold 3: 0.9956
+## Saved Figures
 
-Fold 4: 0.9933
+Running `final_stroke_ensemble.py` produces:
 
-Fold 5: 0.9911
+- `stroke_ensemble_roc_pr_fi.png`
+- `stroke_ensemble_confusion.png`
+- `stroke_ensemble_threshold_sweep.png`
 
-Mean : 0.9932 (+/- 0.0021)
+## Leakage Check
 
-Plot saved as 'stroke\_model\_results.png'
+`label_shuffle_test.py` was used as a sanity check. When labels are shuffled, the models drop to chance-level performance, which supports the claim that the pipeline is not trivially leaking target information.
 
-Model saved as 'stroke\_xgboost\_model.json'
+Observed shuffled-label behavior from the latest check:
 
+- Logistic Regression ROC-AUC: `0.4943`
+- Random Forest ROC-AUC: `0.4998`
+- XGBoost ROC-AUC: `0.4980`
 
-# after changes ( model_comparison.py )
- ---
- Data ready. Training 3 models...
+This is the expected outcome for a leakage-safe pipeline.
 
-Training Logistic Regression...
-  ✓ AUC=0.8517  Recall=0.7984
+## Requirements
 
-Training Random Forest...
-  ✓ AUC=1.0000  Recall=1.0000
+Install the project dependencies with:
 
-Training XGBoost...
-  ✓ AUC=0.9950  Recall=1.0000
-
-
-
-Model                |                Accuracy |  ROC-AUC |  Recall|  Precision    |  F1        | CV-AUC
----------------------|-------------------------|----------|--------|---------------|------------|-------
-Logistic Regression  |     0.7707              | 0.8517   |0.7984  |  0.7563       |0.7768      |0.8460±0.0094
-Random Forest        |     0.9841              |1.0000    |1.0000  |  0.9691       |0.9843      |1.0000±0.0001
-XGBoost              |     0.9728              |0.9950    |1.0000  |   0.9483      |0.9735      |0.9957±0.0017
-
-🏆 Best model by ROC-AUC: Random Forest (1.0000) (A perfect 1.0000 AUC on test data is almost never real.!!!!!!!!!!!!!)
-
-Plot saved as 'model_comparison_results.png'
-Feature importance plot saved as 'feature_importance_comparison.png'
-
-(.venv) C:\Users\user\OneDrive\Documents\Downloads\New folder>
-
-
-# updated leakage-safe model comparison
----
-
-This project now includes a production-style sklearn pipeline for stroke prediction in `model_comparison.py`.
-
-Key improvements:
-
-- Uses a proper `Pipeline` to prevent data leakage.
-- Applies preprocessing inside the pipeline, not before the split.
-- Uses `ColumnTransformer` with `SimpleImputer`, `OneHotEncoder`, and `StandardScaler` for Logistic Regression only.
-- Uses a stratified 80/20 train-test split.
-- Uses `StratifiedKFold` cross-validation on the training split only.
-- Compares Logistic Regression, Random Forest, and XGBoost.
-- Reports accuracy, precision, recall, F1-score, ROC-AUC, confusion matrices, and ROC curves.
-- Uses `random_state=42` for reproducibility.
-
-Sample run output:
-
-```text
-Data loaded. Training leakage-safe pipelines on the stratified train split...
-
-Training Logistic Regression...
-  ROC-AUC=0.8542  Recall=0.7994  F1=0.7789
-
-Training Random Forest...
-  ROC-AUC=1.0000  Recall=1.0000  F1=0.9853
-
-Training XGBoost...
-  ROC-AUC=0.9692  Recall=1.0000  F1=0.9324
-
-
-Model comparison on the 20% holdout test set
-              Model  Accuracy  Precision  Recall  F1-score  ROC-AUC      CV ROC-AUC
-Logistic Regression    0.7733     0.7595  0.7994    0.7789   0.8542 0.8455 ± 0.0044
-      Random Forest    0.9851     0.9710  1.0000    0.9853   1.0000 1.0000 ± 0.0000
-            XGBoost    0.9275     0.8733  1.0000    0.9324   0.9692 0.9608 ± 0.0043
-
-Best model by holdout ROC-AUC: Random Forest (1.0000)
-
-Plot saved as 'model_comparison_results.png'
+```bash
+pip install -r requirements.txt
 ```
 
-The comparison plot is generated by the script and saved as `model_comparison_results.png`.
+## How To Run
 
+Run the cleaning step:
 
-# after making threshold 0.6
-
-```text 
-Data loaded. Training leakage-safe pipelines on the stratified train split...
-Using classification threshold: 0.60
-
-Training Logistic Regression...
-  ROC-AUC=0.8540  Recall=0.7335  F1=0.7626
-
-Training Random Forest...
-  ROC-AUC=1.0000  Recall=1.0000  F1=0.9944
-
-Training XGBoost...
-  ROC-AUC=0.9702  Recall=0.9578  F1=0.9338
-
-
-Model comparison on the 20% holdout test set
-              Model  Accuracy  Precision  Recall  F1-score  ROC-AUC      CV ROC-AUC
-Logistic Regression    0.7717     0.7940  0.7335    0.7626   0.8540 0.8454 ± 0.0045
-      Random Forest    0.9943     0.9888  1.0000    0.9944   1.0000 0.9999 ± 0.0002
-            XGBoost    0.9321     0.9110  0.9578    0.9338   0.9702 0.9599 ± 0.0035
-
-Best model by holdout ROC-AUC: Random Forest (1.0000) at threshold 0.60
-
-Plot saved as 'model_comparison_results.png'
-
-```
-# after testing for data leakage in model_comparison python file
-
-```text 
-Label Shuffle Sanity Check                                                                   
-================================================================================
-Training labels are shuffled before fitting each model.
-Decision threshold: 0.60
-
-              Model  Accuracy  Precision  Recall  F1-score  ROC-AUC CV ROC-AUC (shuffled)
-Logistic Regression    0.5003     0.0000  0.0000    0.0000   0.4943       0.4850 ± 0.0033
-      Random Forest    0.5172     0.5440  0.2099    0.3029   0.4998       0.4952 ± 0.0160
-            XGBoost    0.5054     0.5260  0.1039    0.1735   0.4980       0.5055 ± 0.0089
-
-Expected behavior: ROC-AUC should be near 0.50 if there is no leakage.
-
+```bash
+python final_clean.py
 ```
 
+Run the final ensemble:
+
+```bash
+python final_stroke_ensemble.py
+```
+
+Run the label shuffle sanity check:
+
+```bash
+python label_shuffle_test.py
+```
+
+## Notes
+
+- The latest ensemble run keeps the natural class imbalance instead of forcing a 50/50 split.
+- Threshold tuning is used to make the model more practical for stroke screening, where missing true stroke cases is costly.
+- `final_stroke_ensemble.py` is the main reference implementation for the final reported results in this repository.

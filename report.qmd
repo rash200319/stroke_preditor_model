@@ -35,7 +35,7 @@ format:
 
 This report presents a stroke risk prediction study built on patient health and lifestyle data. The original dataset contained 9,722 records, but deduplication revealed 4,612 exact clinical duplicates that had artificially inflated the stroke positive class. After correction, the true dataset contains 5,110 unique patients with a stroke prevalence of 4.87%, consistent with published real-world clinical rates.
 
-The analysis combines exploratory data analysis, statistical hypothesis testing, feature engineering, and a leakage-safe machine learning pipeline. Five models are evaluated and they are Logistic Regression, Random Forest, XGBoost, Soft Voting Ensemble, and a Stacking Ensemble using out-of-fold meta learning. Under a clinically appropriate High Sensitivity operating mode, Logistic Regression achieves the highest recall (0.940), missing only 3 stroke patients out of 50 in the test set. The Stacking Ensemble achieves the best overall precision-recall performance (AUC-PR = 0.215). A key finding is that simpler regularised models can outperform gradient boosting on recall when the minority class is small, due to the bias variance tradeoff.
+The analysis combines exploratory data analysis, statistical hypothesis testing, feature engineering, and a leakage-safe machine learning pipeline. Five models are evaluated: Logistic Regression, Random Forest, XGBoost, Soft Voting Ensemble, and a Stacking Ensemble using out-of-fold meta learning. Under a clinically appropriate High Sensitivity operating mode, Logistic Regression achieves the highest recall (0.940), missing only 3 stroke patients out of 50 in the test set. The Stacking Ensemble achieves the best overall precision-recall performance (AUC-PR = 0.215). A key finding is that simpler regularised models can outperform gradient boosting on recall when the minority class is small, due to the bias variance tradeoff.
 
 ---
 
@@ -72,55 +72,51 @@ The dataset contains 17 variables covering demographics, medical history, lifest
 | `patient_id` | Identifier | Unique record identifier | Excluded |
 | `gender` | Categorical | Patient gender (M / F) | Encoded (label) |
 | `age` | Continuous | Age in years — strongest predictor (r = 0.243) | Retained |
-| `age_group` | Categorical | Binned age: young / middle / senior | Excluded — redundant with age |
+| `age_group` | Categorical | Binned age: young / middle / senior | Excluded (redundant with age) |
 | `has_hypertension` | Binary | Presence of hypertension (1 = Yes) | Retained |
 | `has_heart_disease` | Binary | Presence of heart disease (1 = Yes) | Retained |
 | `marital_status` | Binary | Marital status (1 = Married) | Retained |
 | `employment_type` | Categorical | Work status: working / government / other | Encoded (label) |
 | `residence` | Categorical | Urban or Rural area of residence | Encoded (label) |
 | `glucose_level` | Continuous | Blood glucose level (mg/dL) | Retained |
-| `high_glucose` | Binary | Binary threshold of glucose_level | Excluded — redundant |
+| `high_glucose` | Binary | Binary threshold of glucose_level | Excluded (redundant) |
 | `bmi_value` | Continuous | Body Mass Index — 201 missing post-dedup | Imputed (grouped median) |
-| `bmi_category` | Categorical | BMI classification | Excluded — redundant |
+| `bmi_category` | Categorical | BMI classification | Excluded (redundant) |
 | `smoking_habit` | Categorical | Smoking status (4 categories) | Encoded (label) |
-| `lifestyle_risk` | Categorical | Composite lifestyle risk level | Excluded — leakage risk |
-| `risk_score` | Ordinal | Composite health risk score (0–2) | Excluded — leakage risk |
+| `lifestyle_risk` | Categorical | Composite lifestyle risk level | Excluded (leakage risk) |
+| `risk_score` | Ordinal | Composite health risk score (0–2) | Excluded (leakage risk) |
 | `stroke_event` | Binary (Target) | Stroke occurrence (1 = Yes, 0 = No) | Target variable |
 
 ### 2.2 Data Integrity: Duplicate Detection and Removal
 
-The original file contains 9,722 rows. After removing duplicates by comparing all clinical fields except `patient_id`, the dataset reduces to 5,110 unique patients. This correction is critical because the duplicates were concentrated entirely in the stroke-positive class. Keeping them would constitute data leakage — the model would be trained and tested on identical records, artificially inflating all performance metrics.
+The original file contains 9,722 rows. After removing duplicates by comparing all clinical fields except `patient_id`, the dataset reduces to 5,110 unique patients. This correction is critical because the duplicates were concentrated entirely in the stroke-positive class. Keeping them would constitute data leakage; the model would be trained and tested on identical records, artificially inflating all performance metrics.
 
 After deduplication, the true distribution is:
 
 - **Non-stroke:** 4,861 patients (95.13%)
 - **Stroke:** 249 patients (4.87%)
 
-This prevalence is consistent with published real-world stroke incidence rates of 2–5%, validating the deduplication as clinically appropriate. A `risk_score` of 2 showed an 84.5% stroke rate and `lifestyle_risk = medium` showed 62.6% — both disproportionately high, indicating these composite columns may have been constructed using stroke-adjacent information. They were excluded from all modelling.
+This prevalence is consistent with published real-world stroke incidence rates of 2–5%, validating the deduplication as clinically appropriate. A `risk_score` of 2 showed an 84.5% stroke rate and `lifestyle_risk = medium` showed 62.6%, both disproportionately high, indicating these composite columns may have been constructed using stroke-adjacent information. They were excluded from all modelling.
 
 ### 2.3 Feature Engineering
 
-Eleven interaction and transformation features were engineered prior to the train-test split, capturing clinically meaningful non-linear relationships that raw features cannot represent independently:
+Seven interaction and transformation features were engineered prior to the train-test split, capturing clinically meaningful non-linear relationships that raw features cannot represent independently:
 
 | Feature | Formula | Clinical Rationale |
 |---|---|---|
-| `age_squared` | age² | Non-linear acceleration of stroke risk with advancing age |
+| `age_squared` | age² | Nonlinear acceleration of stroke risk with advancing age |
 | `is_senior` | 1 if age ≥ 55 | Clinical threshold where stroke risk doubles per decade |
 | `age_x_hypertension` | age × hypertension | Compounding interaction of the two primary risk factors |
 | `age_x_heart_disease` | age × heart disease | Elevated risk in older cardiac patients |
 | `cvd_count` | hypertension + heart_disease | Cumulative cardiovascular disease burden (0–2) |
 | `glucose_x_bmi` | glucose × bmi | Joint metabolic risk of hyperglycaemia and obesity |
-| `glucose_per_bmi` | glucose / (bmi + 1) | Metabolic efficiency ratio |
-| `bmi_deviation` | \|bmi − 25\| | Distance from healthy BMI, capturing both under- and overweight risk |
 | `log_glucose` | log(glucose + 1) | Normalises the right-skewed glucose distribution |
-| `age_over_10` | age / 10 | Scaled age to reduce coefficient magnitude in linear models |
-| `age_x_glucose` | age × glucose_level | Compounding metabolic-age interaction |
 
 ### 2.4 Missing Value Imputation
 
 After deduplication, 201 records (3.93%) have missing `bmi_value`. A grouped median imputation strategy was applied, filling each missing value with the median BMI of patients sharing the same gender and age group (young: age < 40, middle: 40–60, senior: > 60). This approach is more biologically accurate than a global median. Crucially, imputation statistics are computed exclusively from training data and applied to test data separately, preventing any form of imputation leakage across the train-test boundary.
 
-Forward fill and backward fill were considered but rejected — these are appropriate only for time-series data where adjacent observations are temporally related. Patient records in this dataset are independent.
+Forward fill and backward fill were considered but rejected; these are appropriate only for timeseries data where adjacent observations are temporally related. Patient records in this dataset are independent.
 
 ### 2.5 Leakage Prevention
 
@@ -133,7 +129,7 @@ These columns are either redundant or too closely tied to the target to be safe 
 
 ### 2.6 Categorical Encoding
 
-All categorical variables were label-encoded using scikit-learn's `LabelEncoder` fitted on training data only. The four encoded features are: `gender`, `employment_type`, `residence`, and `smoking_habit`. Standard scaling was not applied to tree-based models (Random Forest, XGBoost), which are invariant to feature scale. Logistic Regression used `class_weight='balanced'` as a built-in mechanism to handle the imbalanced target.
+All categorical variables were label encoded using scikit-learn's `LabelEncoder` fitted on training data only. The four encoded features are: `gender`, `employment_type`, `residence`, and `smoking_habit`. Standard scaling was not applied to tree-based models (Random Forest, XGBoost), which are invariant to feature scale. Logistic Regression used `class_weight='balanced'` as a built-in mechanism to handle the imbalanced target.
 
 ---
 
@@ -165,13 +161,13 @@ Stroke prevalence varies across groups for smoking, employment, residence, and g
 
 ### 3.4 Boxplots by Stroke Status
 
-Boxplots confirm the shift in age and glucose for the stroke class. BMI shows more overlap between groups but still contributes predictive signal — particularly through the `glucose_x_bmi` and `bmi_deviation` engineered features.
+Boxplots confirm the shift in age and glucose for the stroke class. BMI shows more overlap between groups but still contributes predictive signal, particularly through the `glucose_x_bmi` engineered feature.
 
 ![Boxplots of numerical features by stroke status, highlighting the age and glucose separation.](visuals/04_boxplots.png){fig-alt="Boxplots by stroke status"}
 
 ### 3.5 Correlation Analysis
 
-The correlation matrix confirms that `age` is the strongest single numeric predictor (r = 0.243). Among engineered features, `age_squared` achieves r = 0.272 — the highest correlation with the target of any single feature — validating the polynomial age transformation. The `age_x_hypertension` interaction (r = 0.141) outperforms either component feature independently, confirming the clinical value of the interaction term.
+The correlation matrix confirms that `age` is the strongest single numeric predictor (r = 0.243). Among engineered features, `age_squared` achieves r = 0.272, the highest correlation with the target of any single feature, validating the polynomial age transformation. The `age_x_hypertension` interaction (r = 0.141) outperforms either component feature independently, confirming the clinical value of the interaction term.
 
 | Feature | Correlation with stroke_event |
 |---|---|
@@ -214,9 +210,9 @@ Non-parametric Mann-Whitney U tests were used for continuous variables and chi-s
 
 ### 4.2 Statistical Inference
 
-The statistical tests support the feature engineering strategy directly. Age is not only the strongest raw predictor but also benefits from non-linear transformation — `age_squared` achieves a higher correlation with the target than raw `age`. Cardiovascular burden works better as a combined indicator (`cvd_count`) than as isolated binary flags.
+The statistical tests support the feature engineering strategy directly. Age is not only the strongest raw predictor but also benefits from nonlinear transformation; `age_squared` achieves a higher correlation with the target than raw `age`. Cardiovascular burden works better as a combined indicator (`cvd_count`) than as isolated binary flags.
 
-Gender and residence do not show statistically significant independent associations with stroke. Despite this, both features appear in the upper-middle range of XGBoost feature importance. This is explained by the fact that XGBoost captures interaction effects and non-linear splits involving these features, even when their marginal correlation with the target is low. Model-based feature importance measures predictive contribution within the model rather than independent statistical association.
+Gender and residence do not show statistically significant independent associations with stroke. Despite this, both features appear in the upper middle range of XGBoost feature importance. This is explained by the fact that XGBoost captures interaction effects and non-linear splits involving these features, even when their marginal correlation with the target is low. Model-based feature importance measures predictive contribution within the model rather than independent statistical association.
 
 ---
 
@@ -226,7 +222,7 @@ Gender and residence do not show statistically significant independent associati
 
 The class ratio is approximately 19.5:1. Three complementary strategies are employed:
 
-- **SMOTE** (Synthetic Minority Oversampling Technique): A custom k-nearest neighbours implementation generates synthetic stroke samples by interpolating between real minority-class patients. Applied with `sampling_strategy=0.35` exclusively inside training folds — never to validation or test data.
+- **SMOTE** (Synthetic Minority Oversampling Technique): A custom k-nearest neighbours implementation generates synthetic stroke samples by interpolating between real minority class patients. Applied with `sampling_strategy=0.35` exclusively inside training folds, never to validation or test data.
 - **`class_weight='balanced'`** (Logistic Regression and Random Forest): Automatically adjusts class weights inversely proportional to class frequency.
 - **`scale_pos_weight`** (XGBoost only): Set to the training class ratio (~19.5), penalising missed stroke predictions more heavily during gradient computation.
 
@@ -244,7 +240,7 @@ Five prediction strategies are evaluated:
 
 ### 5.3 Stacking Design: Out-of-Fold Meta-Learning
 
-The stacking ensemble uses out-of-fold (OOF) predictions to prevent target leakage in the meta-learning stage. Under 5-fold stratified cross-validation, each base model trains on 4 folds and generates probability predictions for the held-out 5th fold. The concatenated OOF predictions form a (n_train × 3) meta-feature matrix used to train the Logistic Regression meta-learner. Test predictions are averaged across all 5 fold-models per base learner. This design ensures the meta-learner never trains on targets it has already seen.
+The stacking ensemble uses out-of-fold (OOF) predictions to prevent target leakage in the meta-learning stage. Under 5-fold stratified cross validation, each base model trains on 4 folds and generates probability predictions for the held-out 5th fold. The concatenated OOF predictions form a (n_train × 3) meta feature matrix used to train the Logistic Regression meta-learner. Test predictions are averaged across all 5 fold models per base learner. This design ensures the meta-learner never trains on targets it has already seen.
 
 ### 5.4 Threshold Tuning
 
@@ -269,7 +265,7 @@ Given the clinical context, metrics are prioritised as follows:
 
 | Metric | Priority | Rationale |
 |---|---|---|
-| Recall / Sensitivity | **Critical** | Minimises missed strokes — the highest-cost clinical error |
+| Recall / Sensitivity | **Critical** | Minimises missed strokes — the highest cost clinical error |
 | AUC-PR / Average Precision | Primary | Most informative for imbalanced binary classification |
 | ROC-AUC | Primary | Overall discriminative ability across all thresholds |
 | F1-Score | Secondary | Harmonic mean of precision and recall |
@@ -334,7 +330,7 @@ The threshold sweep reveals that the Stacking Ensemble maintains recall above 0.
 
 ![XGBoost feature importance ranked by gain metric, showing engineered features dominating the top ranks.](visuals/08_xgb_feature_importance.png){fig-alt="XGBoost feature importance"}
 
-**Table 6.3: Top 10 XGBoost Feature Importance Scores**
+**Table 6.3: Top 9 XGBoost Feature Importance Scores**
 
 | Rank | Feature | Importance | Type | Clinical Meaning |
 |---|---|---|---|---|
@@ -346,8 +342,7 @@ The threshold sweep reveals that the Stacking Ensemble maintains recall above 0.
 | 6 | `gender` | 0.079 | Original | Sex-based physiological differences |
 | 7 | `has_hypertension` | 0.072 | Original | Strongest modifiable risk factor |
 | 8 | `smoking_habit` | 0.063 | Original | Accelerates atherosclerosis |
-| 9 | `age_over_10` | 0.058 | Engineered | Scaled age variant — complementary signal |
-| 10 | `employment_type` | 0.055 | Original | Socioeconomic and stress-related proxy |
+| 9 | `employment_type` | 0.055 | Original | Socioeconomic and stress-related proxy |
 
 Three of the top four features are engineered rather than original clinical features. `age_squared` and `is_senior` together account for approximately 28.4% of total model importance, confirming that the non-linear and threshold effects of age contribute more predictive signal than the raw age value alone. `cvd_count` outperforms either of its component features independently, validating the clinical insight that cumulative cardiovascular burden is more predictive than any single comorbidity.
 

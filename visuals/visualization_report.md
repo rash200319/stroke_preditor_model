@@ -21,16 +21,16 @@ This report is generated separately from the training pipeline.
 
 | Mode | Model | AUC-ROC | AUC-PR | Recall | Precision | F1 |
 | --- | --- | --- | --- | --- | --- | --- |
-| High Sensitivity | Logistic Regression | 0.8326 | 0.2102 | 0.94 | 0.0793 | 0.1462 |
-| High Sensitivity | Random Forest | 0.8183 | 0.1834 | 0.88 | 0.0841 | 0.1536 |
-| High Sensitivity | XGBoost | 0.8034 | 0.1681 | 0.46 | 0.1679 | 0.246 |
-| High Sensitivity | Soft Voting | 0.8282 | 0.1905 | 0.82 | 0.1059 | 0.1876 |
-| High Sensitivity | Stacking | 0.8383 | 0.215 | 0.92 | 0.0819 | 0.1503 |
-| Balanced | Logistic Regression | 0.8326 | 0.2102 | 0.42 | 0.2234 | 0.2917 |
-| Balanced | Random Forest | 0.8183 | 0.1834 | 0.42 | 0.2188 | 0.2877 |
-| Balanced | XGBoost | 0.8034 | 0.1681 | 0.04 | 0.1538 | 0.0635 |
-| Balanced | Soft Voting | 0.8282 | 0.1905 | 0.26 | 0.2 | 0.2261 |
-| Balanced | Stacking | 0.8383 | 0.215 | 0.78 | 0.194 | 0.3108 |
+| High Sensitivity | Logistic Regression | 0.8307 | 0.2324 | 0.96 | 0.0811 | 0.1495 |
+| High Sensitivity | Random Forest | 0.821 | 0.1749 | 0.9 | 0.0846 | 0.1546 |
+| High Sensitivity | XGBoost | 0.815 | 0.2147 | 0.4 | 0.2041 | 0.2703 |
+| High Sensitivity | Soft Voting | 0.8289 | 0.2085 | 0.82 | 0.1099 | 0.1939 |
+| High Sensitivity | Stacking | 0.8342 | 0.2278 | 0.9 | 0.0829 | 0.1518 |
+| Balanced | Logistic Regression | 0.8307 | 0.2324 | 0.76 | 0.1689 | 0.2764 |
+| Balanced | Random Forest | 0.821 | 0.1749 | 0.52 | 0.1926 | 0.2811 |
+| Balanced | XGBoost | 0.815 | 0.2147 | 0.18 | 0.3 | 0.225 |
+| Balanced | Soft Voting | 0.8289 | 0.2085 | 0.4 | 0.2326 | 0.2941 |
+| Balanced | Stacking | 0.8342 | 0.2278 | 0.8 | 0.1633 | 0.2712 |
 
 ## Generated Figures
 

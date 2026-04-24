@@ -164,16 +164,9 @@ def engineer_features(X):
     
     # Age polynomials (captures accelerating risk in seniors)
     X_eng['age_squared'] = X['age'] ** 2
-    X_eng['age_over_10'] = X['age'] / 10
     
     # CVD burden (cumulative cardiovascular risk)
     X_eng['cvd_count'] = X['has_hypertension'] + X['has_heart_disease']
-    
-    # Metabolic indicators (fill NaN with 0 for missing bmi)
-    X_eng['glucose_per_bmi'] = X['glucose_level'] / (X['bmi_value'] + 1)
-    X_eng['glucose_per_bmi'] = X_eng['glucose_per_bmi'].fillna(0)
-    X_eng['bmi_deviation'] = (X['bmi_value'] - 25).abs()
-    X_eng['bmi_deviation'] = X_eng['bmi_deviation'].fillna(0)
     
     # High-risk age flag
     X_eng['is_senior'] = (X['age'] >= 55).astype(int)

@@ -41,7 +41,6 @@ def add_interaction_features(df: pd.DataFrame) -> pd.DataFrame:
 
     df_out = df.copy()
     df_out["age_squared"] = df_out["age"] ** 2
-    df_out["age_x_glucose"] = df_out["age"] * df_out["glucose_level"]
     df_out["age_x_hypertension"] = df_out["age"] * df_out["has_hypertension"]
     df_out["age_x_heart"] = df_out["age"] * df_out["has_heart_disease"]
     df_out["glucose_x_hypertension"] = df_out["glucose_level"] * df_out["has_hypertension"]

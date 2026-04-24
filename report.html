@@ -7,9 +7,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Team CodeNexus">
-<meta name="dcterms.date" content="2026-04-23">
+<meta name="dcterms.date" content="2026-04-24">
 
-<title>Predicting Stroke Risk Using Patient Health and Lifestyle Data</title>
+<title>report</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -38,83 +38,15 @@ ul.task-list li input[type="checkbox"] {
 <link href="report_files/libs/quarto-html/quarto-syntax-highlighting-7f8f88aac4f3542376d5c11b86a4c14d.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="report_files/libs/bootstrap/bootstrap.min.js"></script>
 <link href="report_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="report_files/libs/bootstrap/bootstrap-67270d1595a62d14f123c043d4fb2f18.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="report_files/libs/bootstrap/bootstrap-efbb37e9afcc02144ebbc7afd12a776f.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 
 
 </head>
 
-<body class="quarto-light">
+<body class="fullcontent quarto-light">
 
 <div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
-<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
-  <nav id="TOC" role="doc-toc" class="toc-active">
-    <h2 id="toc-title">Table of contents</h2>
-   
-  <ul>
-  <li><a href="#team-details" id="toc-team-details" class="nav-link active" data-scroll-target="#team-details"><span class="header-section-number">1</span> Team Details</a></li>
-  <li><a href="#abstract" id="toc-abstract" class="nav-link" data-scroll-target="#abstract"><span class="header-section-number">2</span> Abstract</a></li>
-  <li><a href="#introduction" id="toc-introduction" class="nav-link" data-scroll-target="#introduction"><span class="header-section-number">3</span> 1. Introduction</a>
-  <ul class="collapse">
-  <li><a href="#background-and-motivation" id="toc-background-and-motivation" class="nav-link" data-scroll-target="#background-and-motivation"><span class="header-section-number">3.1</span> 1.1 Background and Motivation</a></li>
-  <li><a href="#problem-statement" id="toc-problem-statement" class="nav-link" data-scroll-target="#problem-statement"><span class="header-section-number">3.2</span> 1.2 Problem Statement</a></li>
-  <li><a href="#significance-of-the-study" id="toc-significance-of-the-study" class="nav-link" data-scroll-target="#significance-of-the-study"><span class="header-section-number">3.3</span> 1.3 Significance of the Study</a></li>
-  </ul></li>
-  <li><a href="#dataset-and-preprocessing" id="toc-dataset-and-preprocessing" class="nav-link" data-scroll-target="#dataset-and-preprocessing"><span class="header-section-number">4</span> 2. Dataset and Preprocessing</a>
-  <ul class="collapse">
-  <li><a href="#dataset-description" id="toc-dataset-description" class="nav-link" data-scroll-target="#dataset-description"><span class="header-section-number">4.1</span> 2.1 Dataset Description</a></li>
-  <li><a href="#data-integrity-duplicate-detection-and-removal" id="toc-data-integrity-duplicate-detection-and-removal" class="nav-link" data-scroll-target="#data-integrity-duplicate-detection-and-removal"><span class="header-section-number">4.2</span> 2.2 Data Integrity: Duplicate Detection and Removal</a></li>
-  <li><a href="#feature-engineering" id="toc-feature-engineering" class="nav-link" data-scroll-target="#feature-engineering"><span class="header-section-number">4.3</span> 2.3 Feature Engineering</a></li>
-  <li><a href="#missing-value-imputation" id="toc-missing-value-imputation" class="nav-link" data-scroll-target="#missing-value-imputation"><span class="header-section-number">4.4</span> 2.4 Missing Value Imputation</a></li>
-  <li><a href="#leakage-prevention" id="toc-leakage-prevention" class="nav-link" data-scroll-target="#leakage-prevention"><span class="header-section-number">4.5</span> 2.5 Leakage Prevention</a></li>
-  <li><a href="#categorical-encoding" id="toc-categorical-encoding" class="nav-link" data-scroll-target="#categorical-encoding"><span class="header-section-number">4.6</span> 2.6 Categorical Encoding</a></li>
-  </ul></li>
-  <li><a href="#exploratory-data-analysis" id="toc-exploratory-data-analysis" class="nav-link" data-scroll-target="#exploratory-data-analysis"><span class="header-section-number">5</span> 3. Exploratory Data Analysis</a>
-  <ul class="collapse">
-  <li><a href="#class-balance" id="toc-class-balance" class="nav-link" data-scroll-target="#class-balance"><span class="header-section-number">5.1</span> 3.1 Class Balance</a></li>
-  <li><a href="#numeric-feature-distributions" id="toc-numeric-feature-distributions" class="nav-link" data-scroll-target="#numeric-feature-distributions"><span class="header-section-number">5.2</span> 3.2 Numeric Feature Distributions</a></li>
-  <li><a href="#categorical-patterns" id="toc-categorical-patterns" class="nav-link" data-scroll-target="#categorical-patterns"><span class="header-section-number">5.3</span> 3.3 Categorical Patterns</a></li>
-  <li><a href="#boxplots-by-stroke-status" id="toc-boxplots-by-stroke-status" class="nav-link" data-scroll-target="#boxplots-by-stroke-status"><span class="header-section-number">5.4</span> 3.4 Boxplots by Stroke Status</a></li>
-  <li><a href="#correlation-analysis" id="toc-correlation-analysis" class="nav-link" data-scroll-target="#correlation-analysis"><span class="header-section-number">5.5</span> 3.5 Correlation Analysis</a></li>
-  </ul></li>
-  <li><a href="#statistical-analysis" id="toc-statistical-analysis" class="nav-link" data-scroll-target="#statistical-analysis"><span class="header-section-number">6</span> 4. Statistical Analysis</a>
-  <ul class="collapse">
-  <li><a href="#hypothesis-testing" id="toc-hypothesis-testing" class="nav-link" data-scroll-target="#hypothesis-testing"><span class="header-section-number">6.1</span> 4.1 Hypothesis Testing</a></li>
-  <li><a href="#statistical-inference" id="toc-statistical-inference" class="nav-link" data-scroll-target="#statistical-inference"><span class="header-section-number">6.2</span> 4.2 Statistical Inference</a></li>
-  </ul></li>
-  <li><a href="#modelling-approach" id="toc-modelling-approach" class="nav-link" data-scroll-target="#modelling-approach"><span class="header-section-number">7</span> 5. Modelling Approach</a>
-  <ul class="collapse">
-  <li><a href="#handling-class-imbalance" id="toc-handling-class-imbalance" class="nav-link" data-scroll-target="#handling-class-imbalance"><span class="header-section-number">7.1</span> 5.1 Handling Class Imbalance</a></li>
-  <li><a href="#model-definitions" id="toc-model-definitions" class="nav-link" data-scroll-target="#model-definitions"><span class="header-section-number">7.2</span> 5.2 Model Definitions</a></li>
-  <li><a href="#stacking-design-out-of-fold-meta-learning" id="toc-stacking-design-out-of-fold-meta-learning" class="nav-link" data-scroll-target="#stacking-design-out-of-fold-meta-learning"><span class="header-section-number">7.3</span> 5.3 Stacking Design: Out-of-Fold Meta-Learning</a></li>
-  <li><a href="#threshold-tuning" id="toc-threshold-tuning" class="nav-link" data-scroll-target="#threshold-tuning"><span class="header-section-number">7.4</span> 5.4 Threshold Tuning</a></li>
-  <li><a href="#data-split-strategy" id="toc-data-split-strategy" class="nav-link" data-scroll-target="#data-split-strategy"><span class="header-section-number">7.5</span> 5.5 Data Split Strategy</a></li>
-  <li><a href="#evaluation-metrics" id="toc-evaluation-metrics" class="nav-link" data-scroll-target="#evaluation-metrics"><span class="header-section-number">7.6</span> 5.6 Evaluation Metrics</a></li>
-  </ul></li>
-  <li><a href="#final-results" id="toc-final-results" class="nav-link" data-scroll-target="#final-results"><span class="header-section-number">8</span> 6. Final Results</a>
-  <ul class="collapse">
-  <li><a href="#model-performance-comparison" id="toc-model-performance-comparison" class="nav-link" data-scroll-target="#model-performance-comparison"><span class="header-section-number">8.1</span> 6.1 Model Performance Comparison</a></li>
-  <li><a href="#roc-curves-precision-recall-curves-and-feature-importance" id="toc-roc-curves-precision-recall-curves-and-feature-importance" class="nav-link" data-scroll-target="#roc-curves-precision-recall-curves-and-feature-importance"><span class="header-section-number">8.2</span> 6.2 ROC Curves, Precision-Recall Curves, and Feature Importance</a></li>
-  <li><a href="#confusion-matrices" id="toc-confusion-matrices" class="nav-link" data-scroll-target="#confusion-matrices"><span class="header-section-number">8.3</span> 6.3 Confusion Matrices</a></li>
-  <li><a href="#threshold-sensitivity-analysis" id="toc-threshold-sensitivity-analysis" class="nav-link" data-scroll-target="#threshold-sensitivity-analysis"><span class="header-section-number">8.4</span> 6.4 Threshold Sensitivity Analysis</a></li>
-  <li><a href="#xgboost-feature-importance" id="toc-xgboost-feature-importance" class="nav-link" data-scroll-target="#xgboost-feature-importance"><span class="header-section-number">8.5</span> 6.5 XGBoost Feature Importance</a></li>
-  <li><a href="#key-performance-interpretation" id="toc-key-performance-interpretation" class="nav-link" data-scroll-target="#key-performance-interpretation"><span class="header-section-number">8.6</span> 6.6 Key Performance Interpretation</a></li>
-  </ul></li>
-  <li><a href="#discussion" id="toc-discussion" class="nav-link" data-scroll-target="#discussion"><span class="header-section-number">9</span> 7. Discussion</a>
-  <ul class="collapse">
-  <li><a href="#why-logistic-regression-outperforms-xgboost-on-recall" id="toc-why-logistic-regression-outperforms-xgboost-on-recall" class="nav-link" data-scroll-target="#why-logistic-regression-outperforms-xgboost-on-recall"><span class="header-section-number">9.1</span> 7.1 Why Logistic Regression Outperforms XGBoost on Recall</a></li>
-  <li><a href="#clinical-interpretation-of-key-findings" id="toc-clinical-interpretation-of-key-findings" class="nav-link" data-scroll-target="#clinical-interpretation-of-key-findings"><span class="header-section-number">9.2</span> 7.2 Clinical Interpretation of Key Findings</a></li>
-  <li><a href="#high-risk-patient-profile" id="toc-high-risk-patient-profile" class="nav-link" data-scroll-target="#high-risk-patient-profile"><span class="header-section-number">9.3</span> 7.3 High-Risk Patient Profile</a></li>
-  <li><a href="#deployment-considerations" id="toc-deployment-considerations" class="nav-link" data-scroll-target="#deployment-considerations"><span class="header-section-number">9.4</span> 7.4 Deployment Considerations</a></li>
-  </ul></li>
-  <li><a href="#limitations" id="toc-limitations" class="nav-link" data-scroll-target="#limitations"><span class="header-section-number">10</span> 8. Limitations</a></li>
-  <li><a href="#conclusion" id="toc-conclusion" class="nav-link" data-scroll-target="#conclusion"><span class="header-section-number">11</span> 9. Conclusion</a></li>
-  <li><a href="#recommendations" id="toc-recommendations" class="nav-link" data-scroll-target="#recommendations"><span class="header-section-number">12</span> 10. Recommendations</a></li>
-  <li><a href="#future-work" id="toc-future-work" class="nav-link" data-scroll-target="#future-work"><span class="header-section-number">13</span> 11. Future Work</a></li>
-  <li><a href="#references" id="toc-references" class="nav-link" data-scroll-target="#references"><span class="header-section-number">14</span> References</a></li>
-  <li><a href="#appendix-contribution-statement" id="toc-appendix-contribution-statement" class="nav-link" data-scroll-target="#appendix-contribution-statement"><span class="header-section-number">15</span> Appendix: Contribution Statement</a></li>
-  </ul>
-<div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="report.pdf"><i class="bi bi-file-pdf"></i>PDF</a></li></ul></div></nav>
-</div>
+
 <main class="content" id="quarto-document-content">
 
 <header id="title-block-header" class="quarto-title-block default">
@@ -144,7 +76,7 @@ ul.task-list li input[type="checkbox"] {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">April 23, 2026</p>
+      <p class="date">April 24, 2026</p>
     </div>
   </div>
   
@@ -156,8 +88,8 @@ ul.task-list li input[type="checkbox"] {
 </header>
 
 
-<section id="team-details" class="level2" data-number="1">
-<h2 data-number="1" class="anchored" data-anchor-id="team-details"><span class="header-section-number">1</span> Team Details</h2>
+<section id="team-details" class="level2">
+<h2 class="anchored" data-anchor-id="team-details">Team Details</h2>
 <p><strong>Team Name:</strong> CodeNexus<br>
 <strong>University:</strong> University of Moratuwa<br>
 <strong>Team Members:</strong></p>
@@ -189,21 +121,21 @@ ul.task-list li input[type="checkbox"] {
 </table>
 <hr>
 </section>
-<section id="abstract" class="level2" data-number="2">
-<h2 data-number="2" class="anchored" data-anchor-id="abstract"><span class="header-section-number">2</span> Abstract</h2>
-<p>This report presents a stroke-risk prediction study built on patient health and lifestyle data. The original dataset contained 9,722 records, but deduplication revealed 4,612 exact clinical duplicates that had artificially inflated the stroke-positive class. After correction, the true dataset contains 5,110 unique patients with a stroke prevalence of 4.87%, consistent with published real-world clinical rates.</p>
-<p>The analysis combines exploratory data analysis, statistical hypothesis testing, feature engineering, and a leakage-safe machine learning pipeline. Five models are evaluated: Logistic Regression, Random Forest, XGBoost, Soft Voting Ensemble, and a Stacking Ensemble using out-of-fold meta-learning. Under a clinically appropriate High Sensitivity operating mode, Logistic Regression achieves the highest recall (0.940), missing only 3 stroke patients out of 50 in the test set. The Stacking Ensemble achieves the best overall precision-recall performance (AUC-PR = 0.215). A key finding is that simpler regularised models can outperform gradient boosting on recall when the minority class is small, due to the bias-variance tradeoff.</p>
+<section id="abstract" class="level2">
+<h2 class="anchored" data-anchor-id="abstract">Abstract</h2>
+<p>This report presents a stroke risk prediction study built on patient health and lifestyle data. The original dataset contained 9,722 records, but deduplication revealed 4,612 exact clinical duplicates that had artificially inflated the stroke positive class. After correction, the true dataset contains 5,110 unique patients with a stroke prevalence of 4.87%, consistent with published real-world clinical rates.</p>
+<p>The analysis combines exploratory data analysis, statistical hypothesis testing, feature engineering, and a leakage-safe machine learning pipeline. Five models are evaluated and they are Logistic Regression, Random Forest, XGBoost, Soft Voting Ensemble, and a Stacking Ensemble using out-of-fold meta learning. Under a clinically appropriate High Sensitivity operating mode, Logistic Regression achieves the highest recall (0.940), missing only 3 stroke patients out of 50 in the test set. The Stacking Ensemble achieves the best overall precision-recall performance (AUC-PR = 0.215). A key finding is that simpler regularised models can outperform gradient boosting on recall when the minority class is small, due to the bias variance tradeoff.</p>
 <hr>
 </section>
-<section id="introduction" class="level2" data-number="3">
-<h2 data-number="3" class="anchored" data-anchor-id="introduction"><span class="header-section-number">3</span> 1. Introduction</h2>
-<section id="background-and-motivation" class="level3" data-number="3.1">
-<h3 data-number="3.1" class="anchored" data-anchor-id="background-and-motivation"><span class="header-section-number">3.1</span> 1.1 Background and Motivation</h3>
+<section id="introduction" class="level2">
+<h2 class="anchored" data-anchor-id="introduction">1. Introduction</h2>
+<section id="background-and-motivation" class="level3">
+<h3 class="anchored" data-anchor-id="background-and-motivation">1.1 Background and Motivation</h3>
 <p>Stroke is a major global health problem and a leading cause of death and long-term disability. The World Health Organization estimates that approximately 15 million people experience a stroke each year, with roughly 5 million deaths and another 5 million people left permanently disabled. Stroke can cause paralysis, speech impairment, cognitive dysfunction, and vision loss, placing a significant and growing burden on healthcare systems worldwide.</p>
-<p>Early identification of patients at high stroke risk allows clinicians to intervene before a cerebrovascular event occurs, reducing both clinical severity and long-term rehabilitation costs. Despite advances in medical data collection, transforming large volumes of patient records into actionable risk predictions remains a central challenge in healthcare analytics.</p>
+<p>Early identification of patients at high stroke risk allows clinicians to intervene before a cerebrovascular event occurs, reducing both clinical severity and long term rehabilitation costs. Despite advances in medical data collection, transforming large volumes of patient records into actionable risk predictions remains a central challenge in healthcare analytics.</p>
 </section>
-<section id="problem-statement" class="level3" data-number="3.2">
-<h3 data-number="3.2" class="anchored" data-anchor-id="problem-statement"><span class="header-section-number">3.2</span> 1.2 Problem Statement</h3>
+<section id="problem-statement" class="level3">
+<h3 class="anchored" data-anchor-id="problem-statement">1.2 Problem Statement</h3>
 <p>This study addresses the challenge of predicting stroke events using a dataset of 9,722 patient records collected by a healthcare organisation. After removing duplicate records introduced through an artificial balancing procedure, the true dataset contains 5,110 unique patients with a stroke prevalence of 4.87%. The analysis addresses three core objectives:</p>
 <ul>
 <li>Develop a machine learning pipeline capable of accurately predicting stroke events in the presence of severe class imbalance</li>
@@ -211,17 +143,17 @@ ul.task-list li input[type="checkbox"] {
 <li>Generate evidence-based insights to support preventive healthcare strategies and early screening protocols</li>
 </ul>
 </section>
-<section id="significance-of-the-study" class="level3" data-number="3.3">
-<h3 data-number="3.3" class="anchored" data-anchor-id="significance-of-the-study"><span class="header-section-number">3.3</span> 1.3 Significance of the Study</h3>
+<section id="significance-of-the-study" class="level3">
+<h3 class="anchored" data-anchor-id="significance-of-the-study">1.3 Significance of the Study</h3>
 <p>A key contribution of this study is the identification and correction of an artificial dataset imbalance. The original 9,722 records contain 4,612 exact clinical duplicates concentrated entirely in the stroke-positive class, inflating a naturally rare event to a misleadingly balanced 50/50 distribution. Models trained on this artificially balanced data produce inflated performance metrics that do not reflect real-world deployment conditions. This study works exclusively with the 5,110 deduplicated records, employing SMOTE oversampling, class-weight adjustment, and threshold tuning to address the genuine imbalance in a methodologically sound manner.</p>
 <hr>
 </section>
 </section>
-<section id="dataset-and-preprocessing" class="level2" data-number="4">
-<h2 data-number="4" class="anchored" data-anchor-id="dataset-and-preprocessing"><span class="header-section-number">4</span> 2. Dataset and Preprocessing</h2>
-<section id="dataset-description" class="level3" data-number="4.1">
-<h3 data-number="4.1" class="anchored" data-anchor-id="dataset-description"><span class="header-section-number">4.1</span> 2.1 Dataset Description</h3>
-<p>The dataset contains 17 variables covering demographics, medical history, lifestyle habits, and clinical measurements, with <code>stroke_event</code> as the binary target variable.</p>
+<section id="dataset-and-preprocessing" class="level2">
+<h2 class="anchored" data-anchor-id="dataset-and-preprocessing">2. Dataset and Preprocessing</h2>
+<section id="dataset-description" class="level3">
+<h3 class="anchored" data-anchor-id="dataset-description">2.1 Dataset Description</h3>
+<p>The dataset contains 17 variables covering demographics,medical history , lifestyle habits, and clinical measurements, with <code>stroke_event</code> as the binary target variable.</p>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 25%">
@@ -260,7 +192,7 @@ ul.task-list li input[type="checkbox"] {
 <td><code>age_group</code></td>
 <td>Categorical</td>
 <td>Binned age: young / middle / senior</td>
-<td>Excluded — redundant with age</td>
+<td>Excluded because redundant with age</td>
 </tr>
 <tr class="odd">
 <td><code>has_hypertension</code></td>
@@ -326,13 +258,13 @@ ul.task-list li input[type="checkbox"] {
 <td><code>lifestyle_risk</code></td>
 <td>Categorical</td>
 <td>Composite lifestyle risk level</td>
-<td>Excluded — leakage risk</td>
+<td>Excluded because leakage risk</td>
 </tr>
 <tr class="even">
 <td><code>risk_score</code></td>
 <td>Ordinal</td>
 <td>Composite health risk score (0–2)</td>
-<td>Excluded — leakage risk</td>
+<td>Excluded because leakage risk</td>
 </tr>
 <tr class="odd">
 <td><code>stroke_event</code></td>
@@ -343,19 +275,19 @@ ul.task-list li input[type="checkbox"] {
 </tbody>
 </table>
 </section>
-<section id="data-integrity-duplicate-detection-and-removal" class="level3" data-number="4.2">
-<h3 data-number="4.2" class="anchored" data-anchor-id="data-integrity-duplicate-detection-and-removal"><span class="header-section-number">4.2</span> 2.2 Data Integrity: Duplicate Detection and Removal</h3>
-<p>The original file contains 9,722 rows. After removing duplicates by comparing all clinical fields except <code>patient_id</code>, the dataset reduces to 5,110 unique patients. This correction is critical because the duplicates were concentrated entirely in the stroke-positive class. Keeping them would constitute data leakage — the model would be trained and tested on identical records, artificially inflating all performance metrics.</p>
+<section id="data-integrity-duplicate-detection-and-removal" class="level3">
+<h3 class="anchored" data-anchor-id="data-integrity-duplicate-detection-and-removal">2.2 Data Integrity: Duplicate Detection and Removal</h3>
+<p>The original file contains 9,722 rows. After removing duplicates by comparing all clinical fields except <code>patient_id</code>, the dataset reduces to 5,110 unique patients. This correction is critical because the duplicates were concentrated entirely in the stroke-positive class. Keeping them would constitute data leakage, the model would be trained and tested on identical records, artificially inflating all performance metrics.</p>
 <p>After deduplication, the true distribution is:</p>
 <ul>
 <li><strong>Non-stroke:</strong> 4,861 patients (95.13%)</li>
 <li><strong>Stroke:</strong> 249 patients (4.87%)</li>
 </ul>
-<p>This prevalence is consistent with published real-world stroke incidence rates of 2–5%, validating the deduplication as clinically appropriate. A <code>risk_score</code> of 2 showed an 84.5% stroke rate and <code>lifestyle_risk = medium</code> showed 62.6% — both disproportionately high, indicating these composite columns may have been constructed using stroke-adjacent information. They were excluded from all modelling.</p>
+<p>This prevalence is consistent with published realworld stroke incidence rates of 2–5%, validating the deduplication as clinically appropriate. A <code>risk_score</code> of 2 showed an 84.5% stroke rate and <code>lifestyle_risk = medium</code> showed 62.6% ,both disproportionately high, indicating these composite columns may have been constructed using stroke adjacent information. They were excluded from all modelling.</p>
 </section>
-<section id="feature-engineering" class="level3" data-number="4.3">
-<h3 data-number="4.3" class="anchored" data-anchor-id="feature-engineering"><span class="header-section-number">4.3</span> 2.3 Feature Engineering</h3>
-<p>Eleven interaction and transformation features were engineered prior to the train-test split, capturing clinically meaningful non-linear relationships that raw features cannot represent independently:</p>
+<section id="feature-engineering" class="level3">
+<h3 class="anchored" data-anchor-id="feature-engineering">2.3 Feature Engineering</h3>
+<p>Seven interaction and transformation features were engineered prior to the train-test split, capturing clinically meaningful non-linear relationships that raw features cannot represent independently:</p>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 33%">
@@ -373,7 +305,7 @@ ul.task-list li input[type="checkbox"] {
 <tr class="odd">
 <td><code>age_squared</code></td>
 <td>age²</td>
-<td>Non-linear acceleration of stroke risk with advancing age</td>
+<td>Nonlinear acceleration of stroke risk with advancing age</td>
 </tr>
 <tr class="even">
 <td><code>is_senior</code></td>
@@ -401,40 +333,20 @@ ul.task-list li input[type="checkbox"] {
 <td>Joint metabolic risk of hyperglycaemia and obesity</td>
 </tr>
 <tr class="odd">
-<td><code>glucose_per_bmi</code></td>
-<td>glucose / (bmi + 1)</td>
-<td>Metabolic efficiency ratio</td>
-</tr>
-<tr class="even">
-<td><code>bmi_deviation</code></td>
-<td>|bmi − 25|</td>
-<td>Distance from healthy BMI, capturing both under- and overweight risk</td>
-</tr>
-<tr class="odd">
 <td><code>log_glucose</code></td>
 <td>log(glucose + 1)</td>
 <td>Normalises the right-skewed glucose distribution</td>
 </tr>
-<tr class="even">
-<td><code>age_over_10</code></td>
-<td>age / 10</td>
-<td>Scaled age to reduce coefficient magnitude in linear models</td>
-</tr>
-<tr class="odd">
-<td><code>age_x_glucose</code></td>
-<td>age × glucose_level</td>
-<td>Compounding metabolic-age interaction</td>
-</tr>
 </tbody>
 </table>
 </section>
-<section id="missing-value-imputation" class="level3" data-number="4.4">
-<h3 data-number="4.4" class="anchored" data-anchor-id="missing-value-imputation"><span class="header-section-number">4.4</span> 2.4 Missing Value Imputation</h3>
+<section id="missing-value-imputation" class="level3">
+<h3 class="anchored" data-anchor-id="missing-value-imputation">2.4 Missing Value Imputation</h3>
 <p>After deduplication, 201 records (3.93%) have missing <code>bmi_value</code>. A grouped median imputation strategy was applied, filling each missing value with the median BMI of patients sharing the same gender and age group (young: age &lt; 40, middle: 40–60, senior: &gt; 60). This approach is more biologically accurate than a global median. Crucially, imputation statistics are computed exclusively from training data and applied to test data separately, preventing any form of imputation leakage across the train-test boundary.</p>
-<p>Forward fill and backward fill were considered but rejected — these are appropriate only for time-series data where adjacent observations are temporally related. Patient records in this dataset are independent.</p>
+<p>Forward fill and backward fill were considered but rejected, these are appropriate only for timeseries data where adjacent observations are temporally related. Patient records in this dataset are independent.</p>
 </section>
-<section id="leakage-prevention" class="level3" data-number="4.5">
-<h3 data-number="4.5" class="anchored" data-anchor-id="leakage-prevention"><span class="header-section-number">4.5</span> 2.5 Leakage Prevention</h3>
+<section id="leakage-prevention" class="level3">
+<h3 class="anchored" data-anchor-id="leakage-prevention">2.5 Leakage Prevention</h3>
 <p>Two categories of features were excluded from all modelling:</p>
 <ol type="1">
 <li><strong>Redundant derived features</strong> that are direct functions of retained features: <code>age_group</code>, <code>bmi_category</code>, <code>high_glucose</code></li>
@@ -442,16 +354,16 @@ ul.task-list li input[type="checkbox"] {
 </ol>
 <p>These columns are either redundant or too closely tied to the target to be safe for honest prediction.</p>
 </section>
-<section id="categorical-encoding" class="level3" data-number="4.6">
-<h3 data-number="4.6" class="anchored" data-anchor-id="categorical-encoding"><span class="header-section-number">4.6</span> 2.6 Categorical Encoding</h3>
-<p>All categorical variables were label-encoded using scikit-learn’s <code>LabelEncoder</code> fitted on training data only. The four encoded features are: <code>gender</code>, <code>employment_type</code>, <code>residence</code>, and <code>smoking_habit</code>. Standard scaling was not applied to tree-based models (Random Forest, XGBoost), which are invariant to feature scale. Logistic Regression used <code>class_weight='balanced'</code> as a built-in mechanism to handle the imbalanced target.</p>
+<section id="categorical-encoding" class="level3">
+<h3 class="anchored" data-anchor-id="categorical-encoding">2.6 Categorical Encoding</h3>
+<p>All categorical variables were label encoded using scikit-learn’s <code>LabelEncoder</code> fitted on training data only. The four encoded features are: <code>gender</code>, <code>employment_type</code>, <code>residence</code>, and <code>smoking_habit</code>. Standard scaling was not applied to tree based models (Random Forest, XGBoost), which are invariant to feature scale. Logistic Regression used <code>class_weight='balanced'</code> as a builtin mechanism to handle the imbalanced target.</p>
 <hr>
 </section>
 </section>
-<section id="exploratory-data-analysis" class="level2" data-number="5">
-<h2 data-number="5" class="anchored" data-anchor-id="exploratory-data-analysis"><span class="header-section-number">5</span> 3. Exploratory Data Analysis</h2>
-<section id="class-balance" class="level3" data-number="5.1">
-<h3 data-number="5.1" class="anchored" data-anchor-id="class-balance"><span class="header-section-number">5.1</span> 3.1 Class Balance</h3>
+<section id="exploratory-data-analysis" class="level2">
+<h2 class="anchored" data-anchor-id="exploratory-data-analysis">3. Exploratory Data Analysis</h2>
+<section id="class-balance" class="level3">
+<h3 class="anchored" data-anchor-id="class-balance">3.1 Class Balance</h3>
 <p>The corrected dataset shows the true clinical imbalance: 4,861 non-stroke cases (95.13%) and 249 stroke cases (4.87%).</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
@@ -460,9 +372,9 @@ ul.task-list li input[type="checkbox"] {
 </figure>
 </div>
 </section>
-<section id="numeric-feature-distributions" class="level3" data-number="5.2">
-<h3 data-number="5.2" class="anchored" data-anchor-id="numeric-feature-distributions"><span class="header-section-number">5.2</span> 3.2 Numeric Feature Distributions</h3>
-<p>Age, glucose level, and BMI all show visible differences between stroke and non-stroke patients. Age is the clearest separator, with stroke patients concentrated in the 60–80 age range. Glucose and BMI exhibit right-skewed distributions that justify the log transformation and interaction features included in the engineering step.</p>
+<section id="numeric-feature-distributions" class="level3">
+<h3 class="anchored" data-anchor-id="numeric-feature-distributions">3.2 Numeric Feature Distributions</h3>
+<p>Age, glucose level, and BMI all show visible differences between stroke and non-stroke patients. Age is the clearest separator, with stroke patients concentrated in the 60–80 age range. Glucose and BMI exhibit right skewed distributions that justify the log transformation and interaction features included in the engineering step.</p>
 <table class="caption-top table">
 <thead>
 <tr class="header">
@@ -500,8 +412,8 @@ ul.task-list li input[type="checkbox"] {
 </figure>
 </div>
 </section>
-<section id="categorical-patterns" class="level3" data-number="5.3">
-<h3 data-number="5.3" class="anchored" data-anchor-id="categorical-patterns"><span class="header-section-number">5.3</span> 3.3 Categorical Patterns</h3>
+<section id="categorical-patterns" class="level3">
+<h3 class="anchored" data-anchor-id="categorical-patterns">3.3 Categorical Patterns</h3>
 <p>Stroke prevalence varies across groups for smoking, employment, residence, and gender. Patients with <code>smoking_habit = unknown</code> show a stroke rate comparable to current smokers, suggesting this category may capture patients reluctant to disclose their status due to existing health concerns. Gender and residence show limited independent association but contribute through interaction effects.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
@@ -510,9 +422,9 @@ ul.task-list li input[type="checkbox"] {
 </figure>
 </div>
 </section>
-<section id="boxplots-by-stroke-status" class="level3" data-number="5.4">
-<h3 data-number="5.4" class="anchored" data-anchor-id="boxplots-by-stroke-status"><span class="header-section-number">5.4</span> 3.4 Boxplots by Stroke Status</h3>
-<p>Boxplots confirm the shift in age and glucose for the stroke class. BMI shows more overlap between groups but still contributes predictive signal — particularly through the <code>glucose_x_bmi</code> and <code>bmi_deviation</code> engineered features.</p>
+<section id="boxplots-by-stroke-status" class="level3">
+<h3 class="anchored" data-anchor-id="boxplots-by-stroke-status">3.4 Boxplots by Stroke Status</h3>
+<p>Boxplots confirm the shift in age and glucose for the stroke class. BMI shows more overlap between groups but still contributes predictive signal , particularly through the <code>glucose_x_bmi</code> engineered feature.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="visuals/04_boxplots.png" class="img-fluid figure-img" alt="Boxplots by stroke status"></p>
@@ -520,9 +432,9 @@ ul.task-list li input[type="checkbox"] {
 </figure>
 </div>
 </section>
-<section id="correlation-analysis" class="level3" data-number="5.5">
-<h3 data-number="5.5" class="anchored" data-anchor-id="correlation-analysis"><span class="header-section-number">5.5</span> 3.5 Correlation Analysis</h3>
-<p>The correlation matrix confirms that <code>age</code> is the strongest single numeric predictor (r = 0.243). Among engineered features, <code>age_squared</code> achieves r = 0.272 — the highest correlation with the target of any single feature — validating the polynomial age transformation. The <code>age_x_hypertension</code> interaction (r = 0.141) outperforms either component feature independently, confirming the clinical value of the interaction term.</p>
+<section id="correlation-analysis" class="level3">
+<h3 class="anchored" data-anchor-id="correlation-analysis">3.5 Correlation Analysis</h3>
+<p>The correlation matrix confirms that <code>age</code> is the strongest single numeric predictor (r = 0.243). Among engineered features, <code>age_squared</code> achieves r = 0.272 , the highest correlation with the target of any single feature ,validating the polynomial age transformation. The <code>age_x_hypertension</code> interaction (r = 0.141) outperforms either component feature independently, confirming the clinical value of the interaction term.</p>
 <table class="caption-top table">
 <thead>
 <tr class="header">
@@ -582,10 +494,10 @@ ul.task-list li input[type="checkbox"] {
 <hr>
 </section>
 </section>
-<section id="statistical-analysis" class="level2" data-number="6">
-<h2 data-number="6" class="anchored" data-anchor-id="statistical-analysis"><span class="header-section-number">6</span> 4. Statistical Analysis</h2>
-<section id="hypothesis-testing" class="level3" data-number="6.1">
-<h3 data-number="6.1" class="anchored" data-anchor-id="hypothesis-testing"><span class="header-section-number">6.1</span> 4.1 Hypothesis Testing</h3>
+<section id="statistical-analysis" class="level2">
+<h2 class="anchored" data-anchor-id="statistical-analysis">4. Statistical Analysis</h2>
+<section id="hypothesis-testing" class="level3">
+<h3 class="anchored" data-anchor-id="hypothesis-testing">4.1 Hypothesis Testing</h3>
 <p>Non-parametric Mann-Whitney U tests were used for continuous variables and chi-square tests for categorical variables. Mann-Whitney was preferred over the independent samples t-test due to non-normal distributions observed in <code>age</code> and <code>glucose_level</code>.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
@@ -691,26 +603,26 @@ ul.task-list li input[type="checkbox"] {
 </tbody>
 </table>
 </section>
-<section id="statistical-inference" class="level3" data-number="6.2">
-<h3 data-number="6.2" class="anchored" data-anchor-id="statistical-inference"><span class="header-section-number">6.2</span> 4.2 Statistical Inference</h3>
-<p>The statistical tests support the feature engineering strategy directly. Age is not only the strongest raw predictor but also benefits from non-linear transformation — <code>age_squared</code> achieves a higher correlation with the target than raw <code>age</code>. Cardiovascular burden works better as a combined indicator (<code>cvd_count</code>) than as isolated binary flags.</p>
-<p>Gender and residence do not show statistically significant independent associations with stroke. Despite this, both features appear in the upper-middle range of XGBoost feature importance. This is explained by the fact that XGBoost captures interaction effects and non-linear splits involving these features, even when their marginal correlation with the target is low. Model-based feature importance measures predictive contribution within the model rather than independent statistical association.</p>
+<section id="statistical-inference" class="level3">
+<h3 class="anchored" data-anchor-id="statistical-inference">4.2 Statistical Inference</h3>
+<p>The statistical tests support the feature engineering strategy directly. Age is not only the strongest raw predictor but also benefits from nonlinear transformation , <code>age_squared</code> achieves a higher correlation with the target than raw <code>age</code>. Cardiovascular burden works better as a combined indicator (<code>cvd_count</code>) than as isolated binary flags.</p>
+<p>Gender and residence do not show statistically significant independent associations with stroke. Despite this, both features appear in the upper middle range of XGBoost feature importance. This is explained by the fact that XGBoost captures interaction effects and non linear splits involving these features, even when their marginal correlation with the target is low. Model based feature importance measures predictive contribution within the model rather than independent statistical association.</p>
 <hr>
 </section>
 </section>
-<section id="modelling-approach" class="level2" data-number="7">
-<h2 data-number="7" class="anchored" data-anchor-id="modelling-approach"><span class="header-section-number">7</span> 5. Modelling Approach</h2>
-<section id="handling-class-imbalance" class="level3" data-number="7.1">
-<h3 data-number="7.1" class="anchored" data-anchor-id="handling-class-imbalance"><span class="header-section-number">7.1</span> 5.1 Handling Class Imbalance</h3>
+<section id="modelling-approach" class="level2">
+<h2 class="anchored" data-anchor-id="modelling-approach">5. Modelling Approach</h2>
+<section id="handling-class-imbalance" class="level3">
+<h3 class="anchored" data-anchor-id="handling-class-imbalance">5.1 Handling Class Imbalance</h3>
 <p>The class ratio is approximately 19.5:1. Three complementary strategies are employed:</p>
 <ul>
-<li><strong>SMOTE</strong> (Synthetic Minority Oversampling Technique): A custom k-nearest neighbours implementation generates synthetic stroke samples by interpolating between real minority-class patients. Applied with <code>sampling_strategy=0.35</code> exclusively inside training folds — never to validation or test data.</li>
+<li><strong>SMOTE</strong> (Synthetic Minority Oversampling Technique): A custom k-nearest neighbours implementation generates synthetic stroke samples by interpolating between real minority class patients. Applied with <code>sampling_strategy=0.35</code> exclusively inside training folds , never to validation or test data.</li>
 <li><strong><code>class_weight='balanced'</code></strong> (Logistic Regression and Random Forest): Automatically adjusts class weights inversely proportional to class frequency.</li>
 <li><strong><code>scale_pos_weight</code></strong> (XGBoost only): Set to the training class ratio (~19.5), penalising missed stroke predictions more heavily during gradient computation.</li>
 </ul>
 </section>
-<section id="model-definitions" class="level3" data-number="7.2">
-<h3 data-number="7.2" class="anchored" data-anchor-id="model-definitions"><span class="header-section-number">7.2</span> 5.2 Model Definitions</h3>
+<section id="model-definitions" class="level3">
+<h3 class="anchored" data-anchor-id="model-definitions">5.2 Model Definitions</h3>
 <p>Five prediction strategies are evaluated:</p>
 <table class="caption-top table">
 <colgroup>
@@ -761,20 +673,20 @@ ul.task-list li input[type="checkbox"] {
 </tbody>
 </table>
 </section>
-<section id="stacking-design-out-of-fold-meta-learning" class="level3" data-number="7.3">
-<h3 data-number="7.3" class="anchored" data-anchor-id="stacking-design-out-of-fold-meta-learning"><span class="header-section-number">7.3</span> 5.3 Stacking Design: Out-of-Fold Meta-Learning</h3>
-<p>The stacking ensemble uses out-of-fold (OOF) predictions to prevent target leakage in the meta-learning stage. Under 5-fold stratified cross-validation, each base model trains on 4 folds and generates probability predictions for the held-out 5th fold. The concatenated OOF predictions form a (n_train × 3) meta-feature matrix used to train the Logistic Regression meta-learner. Test predictions are averaged across all 5 fold-models per base learner. This design ensures the meta-learner never trains on targets it has already seen.</p>
+<section id="stacking-design-out-of-fold-meta-learning" class="level3">
+<h3 class="anchored" data-anchor-id="stacking-design-out-of-fold-meta-learning">5.3 Stacking Design: Out-of-Fold Meta-Learning</h3>
+<p>The stacking ensemble uses out-of-fold (OOF) predictions to prevent target leakage in the meta learning stage. Under 5-fold stratified cross validation, each base model trains on 4 folds and generates probability predictions for the held out 5th fold. The concatenated OOF predictions form a (n_train × 3) meta feature matrix used to train the Logistic Regression meta learner. Test predictions are averaged across all 5 fold models per base learner. This design ensures the meta learner never trains on targets it has already seen.</p>
 </section>
-<section id="threshold-tuning" class="level3" data-number="7.4">
-<h3 data-number="7.4" class="anchored" data-anchor-id="threshold-tuning"><span class="header-section-number">7.4</span> 5.4 Threshold Tuning</h3>
-<p>Instead of using the default 0.50 cutoff, thresholds are tuned on a held-out validation set (16% of total data) using a grid search from 0.01 to 0.99. Two operating modes are defined:</p>
+<section id="threshold-tuning" class="level3">
+<h3 class="anchored" data-anchor-id="threshold-tuning">5.4 Threshold Tuning</h3>
+<p>Instead of using the default 0.50 cutoff, thresholds are tuned on a held out validation set (16% of total data) using a grid search from 0.01 to 0.99. Two operating modes are defined:</p>
 <ul>
-<li><strong>High Sensitivity mode</strong> (min_precision = 0.08): Maximises recall subject to precision ≥ 0.08. For every 12 patients flagged for stroke risk, at least 1 must be a true case. Designed for population-level screening where missing a stroke is catastrophic.</li>
-<li><strong>Balanced mode</strong> (min_precision = 0.10): Maximises F1-score subject to precision ≥ 0.10. Suited for clinical settings where false positives carry non-trivial follow-up costs.</li>
+<li><strong>High Sensitivity mode</strong> (min_precision = 0.08): Maximises recall subject to precision ≥ 0.08. For every 12 patients flagged for stroke risk, at least 1 must be a true case. Designed for population level screening where missing a stroke is catastrophic.</li>
+<li><strong>Balanced mode</strong> (min_precision = 0.10): Maximises F1-score subject to precision ≥ 0.10. Suited for clinical settings where false positives carry non trivial follow up costs.</li>
 </ul>
 </section>
-<section id="data-split-strategy" class="level3" data-number="7.5">
-<h3 data-number="7.5" class="anchored" data-anchor-id="data-split-strategy"><span class="header-section-number">7.5</span> 5.5 Data Split Strategy</h3>
+<section id="data-split-strategy" class="level3">
+<h3 class="anchored" data-anchor-id="data-split-strategy">5.5 Data Split Strategy</h3>
 <p>A three-way split was used to ensure complete separation of model training, threshold selection, and final evaluation:</p>
 <table class="caption-top table">
 <colgroup>
@@ -813,8 +725,8 @@ ul.task-list li input[type="checkbox"] {
 </tbody>
 </table>
 </section>
-<section id="evaluation-metrics" class="level3" data-number="7.6">
-<h3 data-number="7.6" class="anchored" data-anchor-id="evaluation-metrics"><span class="header-section-number">7.6</span> 5.6 Evaluation Metrics</h3>
+<section id="evaluation-metrics" class="level3">
+<h3 class="anchored" data-anchor-id="evaluation-metrics">5.6 Evaluation Metrics</h3>
 <p>Given the clinical context, metrics are prioritised as follows:</p>
 <table class="caption-top table">
 <colgroup>
@@ -833,7 +745,7 @@ ul.task-list li input[type="checkbox"] {
 <tr class="odd">
 <td>Recall / Sensitivity</td>
 <td><strong>Critical</strong></td>
-<td>Minimises missed strokes — the highest-cost clinical error</td>
+<td>Minimises missed strokes — the highest cost clinical error</td>
 </tr>
 <tr class="even">
 <td>AUC-PR / Average Precision</td>
@@ -865,10 +777,10 @@ ul.task-list li input[type="checkbox"] {
 <hr>
 </section>
 </section>
-<section id="final-results" class="level2" data-number="8">
-<h2 data-number="8" class="anchored" data-anchor-id="final-results"><span class="header-section-number">8</span> 6. Final Results</h2>
-<section id="model-performance-comparison" class="level3" data-number="8.1">
-<h3 data-number="8.1" class="anchored" data-anchor-id="model-performance-comparison"><span class="header-section-number">8.1</span> 6.1 Model Performance Comparison</h3>
+<section id="final-results" class="level2">
+<h2 class="anchored" data-anchor-id="final-results">6. Final Results</h2>
+<section id="model-performance-comparison" class="level3">
+<h3 class="anchored" data-anchor-id="model-performance-comparison">6.1 Model Performance Comparison</h3>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="visuals/07_model_metric_heatmap.png" class="img-fluid figure-img" alt="Model metric heatmap"></p>
@@ -1034,8 +946,8 @@ ul.task-list li input[type="checkbox"] {
 </table>
 <p>The Balanced mode results confirm that Stacking Ensemble is the superior model when both precision and recall are weighted — it achieves the highest F1 (0.311) while maintaining strong recall (0.780).</p>
 </section>
-<section id="roc-curves-precision-recall-curves-and-feature-importance" class="level3" data-number="8.2">
-<h3 data-number="8.2" class="anchored" data-anchor-id="roc-curves-precision-recall-curves-and-feature-importance"><span class="header-section-number">8.2</span> 6.2 ROC Curves, Precision-Recall Curves, and Feature Importance</h3>
+<section id="roc-curves-precision-recall-curves-and-feature-importance" class="level3">
+<h3 class="anchored" data-anchor-id="roc-curves-precision-recall-curves-and-feature-importance">6.2 ROC Curves, Precision-Recall Curves, and Feature Importance</h3>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="visuals/stroke_ensemble_roc_pr_fi.png" class="img-fluid figure-img" alt="ROC, PR, and feature importance plot"></p>
@@ -1044,8 +956,8 @@ ul.task-list li input[type="checkbox"] {
 </div>
 <p>The Precision-Recall curves are the primary performance indicator for this imbalanced dataset — they directly measure the precision-recall tradeoff on the minority class, unlike ROC curves which can appear favourable even when performance on the minority class is poor. The Stacking Ensemble (red dashed) achieves the highest Average Precision of 0.215, which is 4.4 times above the naive baseline (4.9% prevalence).</p>
 </section>
-<section id="confusion-matrices" class="level3" data-number="8.3">
-<h3 data-number="8.3" class="anchored" data-anchor-id="confusion-matrices"><span class="header-section-number">8.3</span> 6.3 Confusion Matrices</h3>
+<section id="confusion-matrices" class="level3">
+<h3 class="anchored" data-anchor-id="confusion-matrices">6.3 Confusion Matrices</h3>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="visuals/stroke_ensemble_confusion.png" class="img-fluid figure-img" alt="Confusion matrices for all models"></p>
@@ -1059,8 +971,8 @@ ul.task-list li input[type="checkbox"] {
 <li><strong>XGBoost alone</strong>: 23 strokes caught, 27 missed. Only 114 false alarms but misses more than half of all stroke patients — unsuitable as a screening model despite high individual precision.</li>
 </ul>
 </section>
-<section id="threshold-sensitivity-analysis" class="level3" data-number="8.4">
-<h3 data-number="8.4" class="anchored" data-anchor-id="threshold-sensitivity-analysis"><span class="header-section-number">8.4</span> 6.4 Threshold Sensitivity Analysis</h3>
+<section id="threshold-sensitivity-analysis" class="level3">
+<h3 class="anchored" data-anchor-id="threshold-sensitivity-analysis">6.4 Threshold Sensitivity Analysis</h3>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="visuals/stroke_ensemble_threshold_sweep.png" class="img-fluid figure-img" alt="Threshold sweep for stacking"></p>
@@ -1069,15 +981,15 @@ ul.task-list li input[type="checkbox"] {
 </div>
 <p>The threshold sweep reveals that the Stacking Ensemble maintains recall above 0.80 for any threshold below approximately 0.67, demonstrating robust sensitivity across a wide operating range. The precision floor of 0.08 (orange dotted line) ensures the model remains clinically viable — at thresholds below this floor, nearly all patients are flagged, which is operationally unworkable. The plateau of stable high recall between threshold 0.12 and 0.67 gives clinical teams flexibility to adjust the operating point based on available follow-up capacity.</p>
 </section>
-<section id="xgboost-feature-importance" class="level3" data-number="8.5">
-<h3 data-number="8.5" class="anchored" data-anchor-id="xgboost-feature-importance"><span class="header-section-number">8.5</span> 6.5 XGBoost Feature Importance</h3>
+<section id="xgboost-feature-importance" class="level3">
+<h3 class="anchored" data-anchor-id="xgboost-feature-importance">6.5 XGBoost Feature Importance</h3>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="visuals/08_xgb_feature_importance.png" class="img-fluid figure-img" alt="XGBoost feature importance"></p>
 <figcaption>XGBoost feature importance ranked by gain metric, showing engineered features dominating the top ranks.</figcaption>
 </figure>
 </div>
-<p><strong>Table 6.3: Top 10 XGBoost Feature Importance Scores</strong></p>
+<p><strong>Table 6.3: Top 9 XGBoost Feature Importance Scores</strong></p>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 20%">
@@ -1154,13 +1066,6 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="odd">
 <td>9</td>
-<td><code>age_over_10</code></td>
-<td>0.058</td>
-<td>Engineered</td>
-<td>Scaled age variant — complementary signal</td>
-</tr>
-<tr class="even">
-<td>10</td>
 <td><code>employment_type</code></td>
 <td>0.055</td>
 <td>Original</td>
@@ -1170,8 +1075,8 @@ ul.task-list li input[type="checkbox"] {
 </table>
 <p>Three of the top four features are engineered rather than original clinical features. <code>age_squared</code> and <code>is_senior</code> together account for approximately 28.4% of total model importance, confirming that the non-linear and threshold effects of age contribute more predictive signal than the raw age value alone. <code>cvd_count</code> outperforms either of its component features independently, validating the clinical insight that cumulative cardiovascular burden is more predictive than any single comorbidity.</p>
 </section>
-<section id="key-performance-interpretation" class="level3" data-number="8.6">
-<h3 data-number="8.6" class="anchored" data-anchor-id="key-performance-interpretation"><span class="header-section-number">8.6</span> 6.6 Key Performance Interpretation</h3>
+<section id="key-performance-interpretation" class="level3">
+<h3 class="anchored" data-anchor-id="key-performance-interpretation">6.6 Key Performance Interpretation</h3>
 <ul>
 <li>Logistic Regression achieves the highest recall (0.940) in High Sensitivity mode — only 3 stroke patients missed from 50 in the test set</li>
 <li>Stacking Ensemble gives the best overall AUC-PR (0.215) and highest F1 in Balanced mode (0.311)</li>
@@ -1182,15 +1087,15 @@ ul.task-list li input[type="checkbox"] {
 <hr>
 </section>
 </section>
-<section id="discussion" class="level2" data-number="9">
-<h2 data-number="9" class="anchored" data-anchor-id="discussion"><span class="header-section-number">9</span> 7. Discussion</h2>
-<section id="why-logistic-regression-outperforms-xgboost-on-recall" class="level3" data-number="9.1">
-<h3 data-number="9.1" class="anchored" data-anchor-id="why-logistic-regression-outperforms-xgboost-on-recall"><span class="header-section-number">9.1</span> 7.1 Why Logistic Regression Outperforms XGBoost on Recall</h3>
+<section id="discussion" class="level2">
+<h2 class="anchored" data-anchor-id="discussion">7. Discussion</h2>
+<section id="why-logistic-regression-outperforms-xgboost-on-recall" class="level3">
+<h3 class="anchored" data-anchor-id="why-logistic-regression-outperforms-xgboost-on-recall">7.1 Why Logistic Regression Outperforms XGBoost on Recall</h3>
 <p>The most striking result is that Logistic Regression outperforms XGBoost on recall (0.940 vs 0.460) despite XGBoost being a more complex algorithm. This is a direct manifestation of the bias-variance tradeoff under small minority class conditions. With only 249 genuine stroke training cases, XGBoost has insufficient minority-class data to reliably learn the complex non-linear decision boundaries that make gradient boosting superior on larger datasets. In this regime, the model exhibits high variance — it overfits to specific combinations of features seen in the 249 training stroke cases and fails to generalise. Logistic Regression, being a simpler regularised linear model, finds the dominant separating boundary (governed by age and comorbidity features) and extrapolates it more reliably to unseen stroke patients.</p>
 <p>This finding is consistent with established literature on medical machine learning: complex models do not always outperform simpler ones when minority class training data is scarce. It also explains why the Stacking Ensemble bridges the gap — by combining Logistic Regression’s reliable linear boundary with Random Forest and XGBoost’s non-linear contributions, the meta-learner achieves better overall precision-recall performance than any individual model alone.</p>
 </section>
-<section id="clinical-interpretation-of-key-findings" class="level3" data-number="9.2">
-<h3 data-number="9.2" class="anchored" data-anchor-id="clinical-interpretation-of-key-findings"><span class="header-section-number">9.2</span> 7.2 Clinical Interpretation of Key Findings</h3>
+<section id="clinical-interpretation-of-key-findings" class="level3">
+<h3 class="anchored" data-anchor-id="clinical-interpretation-of-key-findings">7.2 Clinical Interpretation of Key Findings</h3>
 <p>The strongest findings are consistent with established medical knowledge:</p>
 <ul>
 <li><strong>Age</strong> is the dominant non-modifiable risk factor. The non-linear acceleration captured by <code>age_squared</code> is the most important feature, confirming that risk grows exponentially rather than linearly after middle age. A patient aged 70 does not have twice the stroke risk of a 35-year-old but many times higher.</li>
@@ -1199,8 +1104,8 @@ ul.task-list li input[type="checkbox"] {
 <li><strong>Smoking status</strong> adds useful signal, particularly where data quality is mixed. The <code>unknown</code> smoking category shows elevated stroke rates, likely capturing patients reluctant to disclose smoking status due to existing health concerns.</li>
 </ul>
 </section>
-<section id="high-risk-patient-profile" class="level3" data-number="9.3">
-<h3 data-number="9.3" class="anchored" data-anchor-id="high-risk-patient-profile"><span class="header-section-number">9.3</span> 7.3 High-Risk Patient Profile</h3>
+<section id="high-risk-patient-profile" class="level3">
+<h3 class="anchored" data-anchor-id="high-risk-patient-profile">7.3 High-Risk Patient Profile</h3>
 <p>Synthesising EDA, statistical tests, and feature importance, four characteristics define the highest-risk profile:</p>
 <ol type="1">
 <li>Age above 60 years <em>(non-modifiable — primary stratification criterion)</em></li>
@@ -1210,8 +1115,8 @@ ul.task-list li input[type="checkbox"] {
 </ol>
 <p>Patients meeting three or four of these criteria represent the priority target for intensive stroke prevention programmes.</p>
 </section>
-<section id="deployment-considerations" class="level3" data-number="9.4">
-<h3 data-number="9.4" class="anchored" data-anchor-id="deployment-considerations"><span class="header-section-number">9.4</span> 7.4 Deployment Considerations</h3>
+<section id="deployment-considerations" class="level3">
+<h3 class="anchored" data-anchor-id="deployment-considerations">7.4 Deployment Considerations</h3>
 <p>For screening use, a high-recall model is more useful than one optimised for precision. A precision of 0.08 in High Sensitivity mode means approximately 1 in 12 patients flagged for stroke risk is a confirmed case. This is clinically defensible for three reasons:</p>
 <ol type="1">
 <li>The consequence of a missed stroke is catastrophic and irreversible</li>
@@ -1222,8 +1127,8 @@ ul.task-list li input[type="checkbox"] {
 <hr>
 </section>
 </section>
-<section id="limitations" class="level2" data-number="10">
-<h2 data-number="10" class="anchored" data-anchor-id="limitations"><span class="header-section-number">10</span> 8. Limitations</h2>
+<section id="limitations" class="level2">
+<h2 class="anchored" data-anchor-id="limitations">8. Limitations</h2>
 <ul>
 <li><strong>Small minority class</strong>: With only 249 genuine stroke cases, complex models cannot learn reliable minority-class decision boundaries. More stroke data would significantly improve all models.</li>
 <li><strong>Single-source dataset</strong>: External validation on an independent cohort from a different healthcare setting is required before clinical deployment.</li>
@@ -1233,15 +1138,15 @@ ul.task-list li input[type="checkbox"] {
 </ul>
 <hr>
 </section>
-<section id="conclusion" class="level2" data-number="11">
-<h2 data-number="11" class="anchored" data-anchor-id="conclusion"><span class="header-section-number">11</span> 9. Conclusion</h2>
+<section id="conclusion" class="level2">
+<h2 class="anchored" data-anchor-id="conclusion">9. Conclusion</h2>
 <p>This project develops a leakage-safe stroke prediction workflow on a genuinely imbalanced dataset of 5,110 unique patients following the detection and removal of 4,612 artificially duplicated records. The pipeline addresses the 4.87% stroke prevalence through SMOTE oversampling, class-weight adjustment, and validation-set threshold tuning — three complementary strategies for handling the 19.5:1 class imbalance.</p>
 <p>Five models were trained and evaluated. Under the High Sensitivity operating mode, Logistic Regression achieved the highest recall (0.940) with only 3 missed stroke cases. The Stacking Ensemble achieved the best overall precision-recall performance (AUC-PR = 0.215) with recall of 0.920. The finding that a simpler regularised linear model outperforms complex boosting individually on recall — due to the bias-variance tradeoff under small minority class conditions — is a meaningful methodological insight for healthcare machine learning practitioners.</p>
 <p>The visual analysis, statistical testing, and feature importance analysis all reinforce the same clinical conclusion: age and cardiovascular burden dominate stroke risk in this dataset, with non-linear and interaction features providing the most discriminatory predictive signal.</p>
 <hr>
 </section>
-<section id="recommendations" class="level2" data-number="12">
-<h2 data-number="12" class="anchored" data-anchor-id="recommendations"><span class="header-section-number">12</span> 10. Recommendations</h2>
+<section id="recommendations" class="level2">
+<h2 class="anchored" data-anchor-id="recommendations">10. Recommendations</h2>
 <ul>
 <li>Use the model as a screening aid, not a diagnostic replacement</li>
 <li>Deploy a two-stage protocol: automated screening followed by clinical review of flagged patients</li>
@@ -1253,8 +1158,8 @@ ul.task-list li input[type="checkbox"] {
 </ul>
 <hr>
 </section>
-<section id="future-work" class="level2" data-number="13">
-<h2 data-number="13" class="anchored" data-anchor-id="future-work"><span class="header-section-number">13</span> 11. Future Work</h2>
+<section id="future-work" class="level2">
+<h2 class="anchored" data-anchor-id="future-work">11. Future Work</h2>
 <ul>
 <li><strong>External validation</strong>: Test on an independent patient cohort with natural class imbalance to assess real-world generalisability</li>
 <li><strong>SHAP-based interpretability</strong>: Individual patient-level risk factor explanation — critical for clinical acceptance and regulatory compliance of ML-based medical tools</li>
@@ -1263,8 +1168,8 @@ ul.task-list li input[type="checkbox"] {
 </ul>
 <hr>
 </section>
-<section id="references" class="level2" data-number="14">
-<h2 data-number="14" class="anchored" data-anchor-id="references"><span class="header-section-number">14</span> References</h2>
+<section id="references" class="level2">
+<h2 class="anchored" data-anchor-id="references">References</h2>
 <p>[1] World Health Organization, “Stroke, Cerebrovascular accident,” WHO, 2023.<br>
 [2] Centers for Disease Control and Prevention, “Stroke Facts and Statistics,” CDC, 2023.<br>
 [3] Global Burden of Disease Study, “Global, regional, and national burden of stroke,” <em>The Lancet Neurology</em>, 2021.<br>
@@ -1273,8 +1178,8 @@ ul.task-list li input[type="checkbox"] {
 [6] T. Chen and C. Guestrin, “XGBoost: A scalable tree boosting system,” <em>KDD</em>, 2016.</p>
 <hr>
 </section>
-<section id="appendix-contribution-statement" class="level2" data-number="15">
-<h2 data-number="15" class="anchored" data-anchor-id="appendix-contribution-statement"><span class="header-section-number">15</span> Appendix: Contribution Statement</h2>
+<section id="appendix-contribution-statement" class="level2">
+<h2 class="anchored" data-anchor-id="appendix-contribution-statement">Appendix: Contribution Statement</h2>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 33%">

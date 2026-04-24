@@ -1,0 +1,459 @@
+---
+title: "Predicting Stroke Risk Using Patient Health and Lifestyle Data"
+subtitle: "Data Analysis Report"
+author:
+  - "Team CodeNexus"
+institute:
+  - "University of Moratuwa"
+date: last-modified
+format:
+  html:
+    toc: true
+    number-sections: true
+    theme: cosmo
+    code-fold: true
+  pdf:
+    toc: true
+    number-sections: true
+    geometry: margin=1in
+---
+
+## Team Details
+
+**Team Name:** CodeNexus  
+**University:** University of Moratuwa  
+**Team Members:**
+
+| Name | Student ID  |
+|---|---|
+| R.P.M. Vithanage | 230674A |
+| S.E.N. Silva | 230615V |
+| T.D.R. Silva | 230616B |
+| S.V.C.H. Vithanage | 230675D |
+---
+
+## Abstract
+
+This report presents a stroke risk prediction study built on patient health and lifestyle data. The original dataset contained 9,722 records, but deduplication revealed 4,612 exact clinical duplicates that had artificially inflated the stroke positive class. After correction, the true dataset contains 5,110 unique patients with a stroke prevalence of 4.87%, consistent with published real world clinical rates.
+
+The analysis combines exploratory data analysis, statistical hypothesis testing, feature engineering, and a leakage-safe machine learning pipeline. Five models are evaluated: Logistic Regression, Random Forest, XGBoost, Soft Voting Ensemble, and a Stacking Ensemble using out of fold meta learning. Under a clinically appropriate High Sensitivity operating mode, Logistic Regression achieves the highest recall (0.960), missing only 2 stroke patients out of 50 in the test set. The Stacking Ensemble achieves the best overall precision recall performance (AUC-PR = 0.2278). A key finding is that simpler regularised models can outperform gradient boosting on recall when the minority class is small, due to the bias variance tradeoff.
+
+---
+
+## Introduction
+
+### Background and Motivation
+
+Stroke is a major global health issue and a leading reason of death and long-term disability, affecting around 15 million people each year. Strokes generally results in severe complications such as paralysis, speech impairment, and cognitive decline. Early identification of high risk patients is crucial for preventing strokes and to reduce their impact. However, converting large volumes of medical data into accurate and actionable risk predictions remains a key challenge in healthcare analytics.
+
+### Problem Statement
+
+This study addresses the challenge of predicting stroke events using a dataset of 9,722 patient records collected by a healthcare organisation. After removing duplicate records introduced through an artificial balancing procedure, the true dataset contains 5,110 unique patients with a stroke prevalence of 4.87%. The analysis addresses three core objectives:
+
+- Develop a machine learning pipeline capable of accurately predicting stroke events in the presence of severe class imbalance
+- Identify the most clinically influential risk factors contributing to stroke occurrence
+- Generate evidence based insights to support preventive healthcare strategies and early screening protocols
+
+### Significance of the Study
+
+A key contribution of this study is the identification and correction of an artificial dataset imbalance. The original 9,722 records contain 4,612 exact clinical duplicates concentrated entirely in the stroke-positive class, inflating a naturally rare event to a misleadingly balanced 50/50 distribution. Models trained on this artificially balanced data produce inflated performance metrics that do not reflect real world deployment conditions. This study works exclusively with the 5,110 deduplicated records, employing SMOTE oversampling, class weight adjustment, and threshold tuning to address the genuine imbalance in a methodologically sound manner.
+
+---
+
+## Dataset and Preprocessing
+
+### Dataset Description
+
+The dataset contains 17 variables covering demographics, medical history, lifestyle habits, and clinical measurements, with `stroke_event` as the binary target variable.
+
+| Variable | Type | Description | Modelling Status |
+|---|---|---|---|
+| `patient_id` | Identifier | Unique record identifier | Excluded |
+| `gender` | Categorical | Patient gender (M / F) | Encoded (label) |
+| `age` | Continuous | Age in years — strongest predictor (r = 0.243) | Retained |
+| `age_group` | Categorical | Binned age: young / middle / senior | Excluded (redundant with age) |
+| `has_hypertension` | Binary | Presence of hypertension (1 = Yes) | Retained |
+| `has_heart_disease` | Binary | Presence of heart disease (1 = Yes) | Retained |
+| `marital_status` | Binary | Marital status (1 = Married) | Retained |
+| `employment_type` | Categorical | Work status: working / government / other | Encoded (label) |
+| `residence` | Categorical | Urban or Rural area of residence | Encoded (label) |
+| `glucose_level` | Continuous | Blood glucose level (mg/dL) | Retained |
+| `high_glucose` | Binary | Binary threshold of glucose_level | Excluded (redundant) |
+| `bmi_value` | Continuous | Body Mass Index — 201 missing post-dedup | Imputed (grouped median) |
+| `bmi_category` | Categorical | BMI classification | Excluded (redundant) |
+| `smoking_habit` | Categorical | Smoking status (4 categories) | Encoded (label) |
+| `lifestyle_risk` | Categorical | Composite lifestyle risk level | Excluded (leakage risk) |
+| `risk_score` | Ordinal | Composite health risk score (0–2) | Excluded (leakage risk) |
+| `stroke_event` | Binary (Target) | Stroke occurrence (1 = Yes, 0 = No) | Target variable |
+
+###  Data Integrity: Duplicate Detection and Removal
+
+Original Data has 9,722 observations. After cleaning the duplicate data based on all clinical variables except the patient identifier variable, there remain 5,110 patients. This is important since all duplicate data occurred in only one class—stroke positive. If retained, this will amount to data leakage since the same observation would be used for both training and testing the model, resulting in inflated model metrics.
+
+The corrected distribution after removing duplicates is as follows:
+
+- **No Stroke:** 4,861 patients (95.13%)
+- **Stroke:** 249 patients (4.87%)
+
+This distribution aligns well with documented real-world prevalence of stroke ranging between 2-5%. The high stroke prevalence rate for `risk_score = 2` at 84.5% and `lifestyle_risk = medium` at 62.6% suggests these composite variables may have been formed using stroke-related data. Both were excluded from all modelling.
+
+###  Feature Engineering
+
+Seven interaction and transformation features were engineered prior to the train test split, capturing clinically meaningful non linear relationships that raw features cannot represent independently:
+
+| Feature | Formula | Clinical Rationale |
+|---|---|---|
+| `age_squared` | age² | Nonlinear acceleration of stroke risk with advancing age |
+| `is_senior` | 1 if age ≥ 55 | Clinical threshold where stroke risk doubles per decade |
+| `age_x_hypertension` | age × hypertension | Compounding interaction of the two primary risk factors |
+| `age_x_heart_disease` | age × heart disease | Elevated risk in older cardiac patients |
+| `cvd_count` | hypertension + heart_disease | Cumulative cardiovascular disease burden (0–2) |
+| `glucose_x_bmi` | glucose × bmi | Joint metabolic risk of hyperglycaemia and obesity |
+| `log_glucose` | log(glucose + 1) | Normalises the right-skewed glucose distribution |
+
+###  Missing Value Imputation
+
+After de-duplication, there are 201 records (3.93%) which contain null values in bmi_value. A grouped median strategy was used to impute the missing value such that the value was imputed using the median of the bmi_value for those who are of the same gender and age range (young if less than 40 years old, middle if between 40-60 years old, and senior if greater than 60 years old). This method is more biologically meaningful compared to the use of the global median.
+
+The forward fill and backward fill strategies were considered but not adopted since they can be used only when the data are timeseries wherein there is temporal correlation among records. This is not true for patient data.
+
+###  Leakage Prevention
+
+Two categories of features were excluded from all modelling:
+
+1. **Redundant derived features** that are direct functions of retained features: `age_group`, `bmi_category`, `high_glucose`
+2. **Composite scores with high leakage risk**: `risk_score`, `lifestyle_risk`
+
+These columns are either redundant or too closely tied to the target to be safe for honest prediction.
+
+###  Categorical Encoding
+
+All categorical variables were label encoded using scikit-learn's `LabelEncoder` fitted on training data only. The four encoded features are: `gender`, `employment_type`, `residence`, and `smoking_habit`. Standard scaling was not applied to tree-based models (Random Forest, XGBoost), which are invariant to feature scale. Logistic Regression used `class_weight='balanced'` as a built in mechanism to handle the imbalanced target.
+
+---
+
+##  Exploratory Data Analysis
+
+###  Class Balance
+
+The corrected dataset shows the true clinical imbalance: 4,861 non-stroke cases (95.13%) and 249 stroke cases (4.87%).
+
+![Class balance bar chart showing the true imbalanced distribution after deduplication.](visuals/01_class_balance.png){fig-alt="Class balance bar chart"}
+
+###  Numeric Feature Distributions
+
+Age, glucose level, and BMI all show visible differences between stroke and non stroke patients. Age is the clearest separator, with stroke patients concentrated in the 60–80 age range. Glucose and BMI exhibit right skewed distributions that justify the log transformation and interaction features included in the engineering step.
+
+| Feature | Mean (No Stroke) | Mean (Stroke) | Difference |
+|---|---|---|---|
+| age | ~52.6 | ~67.7 | +15.1 years |
+| glucose_level | ~104.8 | ~118.3 | +13.5 mg/dL |
+| bmi_value | ~28.8 | ~30.1 | +1.3 |
+
+![Numeric feature distributions split by stroke status, showing clearly shifted age and glucose distributions.](visuals/02_numeric_distributions.png){fig-alt="Numeric distribution plots"}
+
+###  Categorical Patterns
+
+The frequency of stroke occurrence is different among various categories based on smoking, employment, residence, and gender. Individuals categorized by `smoking_habit = unknown` have a similar stroke occurrence to that of individuals who currently smoke, implying that these individuals may be hesitant to reveal their smoking habit because of other health conditions.
+
+![Categorical feature counts split by stroke status.](visuals/03_categorical_counts.png){fig-alt="Categorical count plots"}
+
+###  Boxplots by Stroke Status
+
+Boxplots confirm the shift in age and glucose for the stroke class. BMI shows more overlap between groups but still contributes predictive signal, particularly through the `glucose_x_bmi` engineered feature.
+
+![Boxplots of numerical features by stroke status, highlighting the age and glucose separation.](visuals/04_boxplots.png){fig-alt="Boxplots by stroke status"}
+
+###  Correlation Analysis
+
+The correlation matrix confirms that `age` is the strongest single numeric predictor (r = 0.243). Among engineered features, `age_squared` achieves r = 0.272, the highest correlation with the target of any single feature, validating the polynomial age transformation. The `age_x_hypertension` interaction (r = 0.141) outperforms either component feature independently, confirming the clinical value of the interaction term.
+
+| Feature | Correlation with stroke_event |
+|---|---|
+| `age_squared` | 0.272 (highest) |
+| `age` | 0.243 |
+| `age_x_hypertension` | 0.141 |
+| `glucose_level` | 0.133 |
+| `has_heart_disease` | 0.122 |
+| `has_hypertension` | 0.121 |
+| `marital_status` | 0.104 |
+| `bmi_value` | 0.050 |
+| `gender` | ~0.02 |
+| `residence` | ~0.01 |
+
+![Correlation heatmap of numerical features and the target variable.](visuals/05_correlation_heatmap.png){fig-alt="Correlation heatmap"}
+
+---
+
+## Statistical Analysis
+
+### Hypothesis Testing
+
+Non parametric Mann-Whitney U tests were used for continuous variables and chi-square tests for categorical variables. Mann-Whitney was preferred over the independent samples t-test due to non normal distributions observed in `age` and `glucose_level`.
+
+![Summary visualisation of statistical test results across all features.](visuals/06_statistical_tests.png){fig-alt="Statistical tests summary"}
+
+| Feature | Test | p-value | Direction | Clinical Interpretation |
+|---|---|---|---|---|
+| `age` | Mann-Whitney U | < 0.001 | Stroke patients older | Primary biological risk factor |
+| `glucose_level` | Mann-Whitney U | < 0.001 | Higher in stroke group | Hyperglycaemia promotes atherosclerosis |
+| `bmi_value` | Mann-Whitney U | < 0.001 | Higher in stroke group | Obesity increases cardiovascular strain |
+| `age_squared` | Mann-Whitney U | < 0.001 | Higher in stroke group | Non-linear age acceleration confirmed |
+| `age_x_hypertension` | Mann-Whitney U | < 0.001 | Higher in stroke group | Compounding risk validated statistically |
+| `has_hypertension` | Chi-Square | < 0.001 | — | Strong association with stroke |
+| `has_heart_disease` | Chi-Square | < 0.001 | — | Strong association with stroke |
+| `smoking_habit` | Chi-Square | < 0.001 | — | Significant group differences |
+| `marital_status` | Chi-Square | < 0.001 | — | Significant (age proxy) |
+| `gender` | Chi-Square | ~0.12 | — | No significant independent association |
+| `residence` | Chi-Square | ~0.18 | — | No significant independent association |
+
+### Statistical Inference
+
+Statistical analysis validates the feature engineering process. Firstly, age is not only the most prominent unprocessed predictor but also improves through the non linear transformation of `age_squared`, which correlates more strongly with the outcome than `age` itself. The burden of cardiovascular disease is a better predictor of stroke in a combined variable called `cvd_count` than in isolation.
+
+Gender and residence are not statistically associated with stroke independently of other factors. Nevertheless, both variables rank quite high in terms of XGBoost feature importance. This stems from the nature of model based feature importance, since the interaction effect of gender and residence as well as their non-linear effect is captured in the tree based models.
+
+---
+
+##  Modelling Approach
+
+###  Handling Class Imbalance
+
+The class ratio is approximately 19.5:1. Three complementary strategies are employed:
+
+- **SMOTE** (Synthetic Minority Oversampling Technique): A custom k-nearest neighbours implementation generates synthetic stroke samples by interpolating between real minority class patients. Applied with `sampling_strategy=0.35` exclusively inside training folds, never to validation or test data.
+- **`class_weight='balanced'`** (Logistic Regression and Random Forest): Automatically adjusts class weights inversely proportional to class frequency.
+- **`scale_pos_weight`** (XGBoost only): Set to the training class ratio (~19.5), penalising missed stroke predictions more heavily during gradient computation.
+
+###  Model Definitions
+
+Five prediction strategies are evaluated:
+
+| Model | Type | Key Hyperparameters | Imbalance Strategy |
+|---|---|---|---|
+| Logistic Regression | Linear baseline | C=0.5, max_iter=2000, solver=lbfgs | class_weight='balanced' |
+| Random Forest | Bagging ensemble | 400 trees, max_depth=10, min_samples_leaf=3 | class_weight='balanced' + SMOTE |
+| XGBoost | Boosting | 500 trees, depth=4, lr=0.05, early stopping=30 | scale_pos_weight=19.5 + SMOTE |
+| Soft Voting | Probability averaging | Mean of LR + RF + XGB probabilities | Inherited from base models |
+| Stacking Ensemble | Meta-learning | LR meta-learner on 5-fold OOF predictions | class_weight='balanced' (meta) |
+
+###  Stacking Design: Out of Fold Meta Learning
+
+In the stacking approach, the out of fold (OOF) predictions method is used to avoid any issues of target leakage when building the meta-models. In stratified 5-fold cross-validation, the 4 folds are used for training the base models, while the 5th fold gets the probability predictions. All the OOF predictions combined will be used to create a (n_train x 3) meta-feature vector that will then be used for the training of the logistic regression meta-model.
+
+### Threshold Tuning
+
+Rather than employing the standard threshold of 0.50, the thresholds are tuned on a separate validation set (16% of the total data) via a grid search ranging from 0.01 to 0.99. There are two modes of operation:
+
+- **High Sensitivity Mode** (min_precision = 0.08): Optimizes recall while maintaining precision >= 0.08. Amongst every 12 patients predicted for strokes, at least one should be a positive sample. Intended for screening purposes within populations, where missing strokes would have dire consequences.
+- **Balanced Mode** (min_precision = 0.10): Optimizes the F1-score while maintaining precision >= 0.10. Suitable for clinical scenarios where false positives entail non-negligible costs.
+
+### Data Split Strategy
+
+A three way split was used to ensure complete separation of model training, threshold selection, and final evaluation:
+
+| Split | Patients | Stroke Cases | Purpose |
+|---|---|---|---|
+| Inner Train | 3,270 (64%) | ~159 (4.9%) | Base model training: OOF stacking meta-features |
+| Validation | 818 (16%) | ~40 (4.9%) | Threshold tuning: never used for model training |
+| Test | 1,022 (20%) | 50 (4.9%) | Final evaluation: held out throughout all modelling stages |
+
+###  Evaluation Metrics
+
+Given the clinical context, metrics are prioritised as follows:
+
+| Metric | Priority | Rationale |
+|---|---|---|
+| Recall / Sensitivity | **Critical** | Minimises missed strokes: the highest cost clinical error |
+| AUC-PR / Average Precision | Primary | Most informative for imbalanced binary classification |
+| ROC-AUC | Primary | Overall discriminative ability across all thresholds |
+| F1-Score | Secondary | Harmonic mean of precision and recall |
+| Precision | Secondary | Determines clinical feasibility of follow-up |
+| Confusion Matrix | Supplementary | Absolute counts for direct clinical interpretation |
+
+---
+
+##  Final Results
+
+###  Model Performance Comparison
+
+![Model metric heatmap comparing all five models across key evaluation metrics.](visuals/07_model_metric_heatmap.png){fig-alt="Model metric heatmap"}
+
+**Table 8.1: Final Test Set Results — High Sensitivity Mode (n=1,022, 50 stroke cases)**
+
+| Model | Threshold | AUC-ROC | AUC-PR | Recall | Precision | F1 | Missed (FN) | False Alarms (FP) |
+|---|---|---|---|---|---|---|---|---|
+| Logistic Regression | 0.12 | 0.8307 | 0.2324 | **0.9600** | 0.0811 | 0.1495 | **2** | 544 |
+| Random Forest | 0.02 | 0.8210 | 0.1749 | 0.9000 | 0.0846 | 0.1546 | **5** | 487 |
+| XGBoost | 0.68 | 0.8150 | 0.2147 | 0.4000 | 0.2041 | 0.2703 | 30 | **78** |
+| Soft Voting | 0.27 | 0.8289 | 0.2085 | 0.8200 | 0.1099 | 0.1939 | 9 | 346 |
+| **Stacking Ensemble** | 0.14 | **0.8342** | **0.2278** | 0.9000 | 0.0829 | 0.1518 | **5** | 498 |
+
+> All thresholds were determined exclusively on the validation set. Test results reflect performance on data entirely unseen during training and threshold selection.
+
+**Table 8.2: Final Test Set Results — Balanced Mode**
+
+| Model | Threshold | AUC-ROC | AUC-PR | Recall | Precision | F1 |
+|---|---|---|---|---|---|---|
+| Logistic Regression | 0.61 | 0.8307 | 0.2324 | 0.7600 | 0.1689 | 0.2764 |
+| Random Forest | 0.32 | 0.8210 | 0.1749 | 0.5200 | 0.1926 | 0.2811 |
+| XGBoost | 0.83 | 0.8150 | 0.2147 | 0.1800 | 0.3000 | 0.2250 |
+| Soft Voting | 0.61 | 0.8289 | 0.2085 | 0.4000 | 0.2326 | 0.2941 |
+| **Stacking Ensemble** | 0.61 | **0.8342** | **0.2278** | 0.8000 | 0.1633 | **0.2712** |
+
+The Balanced mode results confirm that Stacking Ensemble is the superior model when both precision and recall are weighted: it achieves the highest F1 (0.311) while maintaining strong recall (0.780).
+
+### ROC Curves, Precision-Recall Curves, and Feature Importance
+
+![ROC curves (left), Precision-Recall curves (centre), and XGBoost feature importance (right) for all five models. The Stacking Ensemble achieves the highest AUC-PR (0.215).](visuals/stroke_ensemble_roc_pr_fi.png){fig-alt="ROC, PR, and feature importance plot"}
+
+The Precision-Recall curves represent the main metric to be considered for this unbalanced data set because they directly evaluate the precision and recall trade-off for the minority class, whereas ROC curves may look good even if the minority class performance is low. The Stacking Ensemble model (in red dashed) has the best Average Precision value of 0.2278, which is 4.7 times higher than the base-line value of 4.9%.
+
+### Confusion Matrices
+
+![Confusion matrices for all five models under High Sensitivity operating mode. Logistic Regression (top-left) achieves recall=0.940 with only 3 missed strokes. Stacking Ensemble (bottom-right) achieves recall=0.920 with 4 missed strokes and the highest AUC-PR.](visuals/stroke_ensemble_confusion.png){fig-alt="Confusion matrices for all models"}
+
+**Interpretation of confusion matrices in clinical practice:**
+
+- **Logistic Regression:** 48 strokes detected, 2 false negatives, and 544 false alarms. Best recall but worst false alarm rate. Ideal choice for highly sensitive screening.
+- **Stacking Ensemble:** 45 strokes detected, 5 false negatives, and 498 false alarms. Highest AUC-PR score. Ideal choice for balancing precision and recall.
+- **XGBoost only:** 20 strokes detected, 30 false negatives. Just 78 false alarms but misses 60% of all stroke patients — not ideal for screening, although precision is high.
+
+### Threshold Sensitivity Analysis
+
+![Threshold sweep for the Stacking Ensemble on the test set. Black dashed line (thr=0.14) marks High Sensitivity operating point. Purple dashed line (thr=0.61) marks Balanced operating point.](visuals/stroke_ensemble_threshold_sweep.png){fig-alt="Threshold sweep for stacking"}
+
+As can be seen from the threshold sweep plot, the model called Stacking Ensemble shows its sensitivity in the threshold values less than 0.61 because its recall level never drops below 0.80. As for the precision floor equal to 0.08, it makes the model clinically acceptable. At the values less than the precision floor, almost all patients are marked with a positive label, which does not make sense operationally.
+
+### XGBoost Feature Importance
+
+![XGBoost feature importance ranked by gain metric, showing engineered features dominating the top ranks.](visuals/08_xgb_feature_importance.png){fig-alt="XGBoost feature importance"}
+
+**Table 8.3: Top 9 XGBoost Feature Importance Scores**
+
+| Rank | Feature | Importance | Type | Clinical Meaning |
+|---|---|---|---|---|
+| 1 | `age_squared` | 0.156 | Engineered | Non-linear age acceleration of stroke risk |
+| 2 | `is_senior` | 0.128 | Engineered | Binary flag: age ≥ 55 threshold effect |
+| 3 | `age` | 0.115 | Original | Primary biological risk factor |
+| 4 | `cvd_count` | 0.098 | Engineered | Combined hypertension + heart disease burden |
+| 5 | `residence` | 0.087 | Original | Urban/rural healthcare access differences |
+| 6 | `gender` | 0.079 | Original | Sex-based physiological differences |
+| 7 | `has_hypertension` | 0.072 | Original | Strongest modifiable risk factor |
+| 8 | `smoking_habit` | 0.063 | Original | Accelerates atherosclerosis |
+| 9 | `employment_type` | 0.055 | Original | Socioeconomic and stress-related proxy |
+
+The first three features among the top four are all engineered features, and not clinical features. "age_squared" and "is_senior" together make up around 28.4% of the overall feature importance score in the model, thereby demonstrating the significance of the non-linear and thresholded nature of age. "cvd_count" proves to be better than both its individual components, proving the notion that overall cardiovascular disease load is more predictive than individual comorbidities.
+
+### Key Performance Interpretation
+
+- Logistic Regression gets the best recall score of (0.960) on High Sensitivity mode: only two stroke patients were left out from fifty patients in the test set
+- Stacking Ensemble gets the best overall AUC-PR of (0.2278) and best F1 score of (0.2712) in Balanced mode
+- XGBoost individually is not the most robust model with high recall score: refer Section 7.1 for the reasoning
+- Tuning threshold makes an impact on every individual model's performance behavior: default threshold of (0.50) is not suitable for the clinical problem
+- Engineered features have higher ranking scores than original clinical features in XGBoost: proving the effectiveness of feature engineering process
+
+---
+
+##  Discussion
+
+###  Why Logistic Regression Outperforms XGBoost on Recall
+
+One of the most notable findings from this experiment is the surprising fact that Logistic Regression has better recall (0.960) compared to XGBoost (0.400), even though the latter is a much more complicated model. The phenomenon is caused directly by the bias-variance trade-off due to the lack of minority class instances. Indeed, with only 249 actual stroke training observations, XGBoost does not have enough examples to learn a sophisticated non-linear decision boundary and therefore falls into the category of high variance. That is, the algorithm becomes overly dependent on certain combinations of variables observed in the sample of 249 stroke instances and cannot generalize well to other stroke cases. On the contrary, the simpler and regularized Logistic Regression successfully detects the main dividing line between strokes based on age and comorbidity variables and can extrapolate it to new strokes.
+
+This fact is in accordance with the results presented in academic literature and shows that complicated models may be less effective than simple ones in case of an underrepresentation of minority classes in training sets. This insight can explain the superior performance of the Stacking Ensemble as a combination of all three methods' boundaries.
+
+###  Clinical Interpretation of Key Findings
+
+The strongest findings are consistent with established medical knowledge:
+
+- **Age** is the dominant non modifiable risk factor. The non linear acceleration captured by `age_squared` is the most important feature, confirming that risk grows exponentially rather than linearly after middle age. A patient aged 70 does not have twice the stroke risk of a 35 year old but many times higher.
+- **Hypertension and heart disease** compound risk. The `cvd_count` feature, which represents cumulative cardiovascular burden, outperforms either comorbidity independently, consistent with the clinical understanding that stroke risk factors multiply rather than add.
+- **Glucose and BMI** matter primarily through interaction terms. `glucose_x_bmi` captures the joint metabolic risk of hyperglycaemia and obesity — a subgroup for whom combined dietary and pharmacological intervention may yield the greatest stroke prevention benefit.
+- **Smoking status** adds useful signal, particularly where data quality is mixed. The `unknown` smoking category shows elevated stroke rates, likely capturing patients reluctant to disclose smoking status due to existing health concerns.
+
+### High-Risk Patient Profile
+
+Combining insights from EDA, hypothesis testing, and feature importance, there are four features that determine the riskiest patient profile:
+
+1. Patients older than 60 years *(not modifiable – key factor for classification)*
+2. Hypertension *(modifiable by treatment with antihypertensive drugs)*
+3. High glucose level higher than 140 mg/dL *(modifiable through exercise, diet, or medication)*
+4. Heart disease *(treated using cardiac protocols)*
+
+Individuals who possess three or four of these factors are considered the prime focus for stroke prevention programs.
+
+### Deployment Considerations
+
+The screening model that has a higher recall rate would be of greater value compared to a highly precise model. A precision of 0.08 in the High Sensitivity mode implies that among those patients who have been identified at risk for a stroke, only one out of 12 will turn out to be a confirmed patient. This is clinically justified on three grounds:
+
+1. Stroke is a very serious and irreparable disease that requires immediate diagnosis and treatment
+2. Further testing required after screening does not involve any medical procedures, only a simple evaluation
+3. Precision levels of 5% to 10% are acceptable in most clinically accepted screening tests across various disciplines such as mammography
+
+A two-tier process is advised – screening of high-risk patients by the model followed by evaluation of the flagged patients by the clinicians.
+
+---
+
+## Limitations
+
+- **Small minority class**: There are only 249 stroke patients, and complex algorithms cannot build reliable decision boundaries for the minority class. The addition of more stroke instances will greatly enhance all algorithms.
+- **Single-source dataset**: Independent validation on an external sample from another medical institution is needed prior to clinical application.
+- **No time series data**: The current data set is a snapshot. Monitoring variations in blood pressure, glucose, and BMI would drastically increase predictive performance.
+- **Smoking habit missing**: A sizable number of patients have `smoking_habit` unknown, making it harder to utilize this adjustable predictor.
+- **Synthetic balance**: Duplicates of all 249 stroke instances needed to be identified and removed after pre-release. Analyses carried out on the initial 9,722 records without duplicate removal should be approached with skepticism.
+
+---
+
+## Conclusion
+
+In this paper, we create an imbalanced dataset containing 5,110 distinct patients after removing 4,612 duplicated patients in order to build a leakage-free stroke prediction pipeline using SMOTE sampling, class weights, and threshold selection on the validation set. These techniques will be used to address class imbalance with stroke prevalence at 4.87%.
+
+Fitting and evaluation of five classifiers were performed. Among the High Sensitivity models, Logistic Regression has the highest recall (0.960) with 2 patients missed being diagnosed with stroke. Stacking Ensemble had the best precision-recall AUC score (0.2278) with recall of 0.900 and highest F1-score in balanced mode (0.2712). It is noteworthy that a simpler regularised linear classifier could have higher recall due to the inherent trade-off between bias-variance for a very small number of minority classes in boosting.
+
+All of our visual analysis, statistical tests and feature importance analysis corroborate each other to prove one point clinically; the patient's age and cardiovascular burden plays the dominating role in this dataset and non-linear or interaction features offer the greatest discriminatory power in predicting the stroke occurrence.
+
+
+
+## Recommendations
+
+- Use the model to screen rather than diagnose
+- Implement a two-step strategy: screen using automated processes, then follow-up clinically with those who have been flagged
+- Focus on patients who present high age, high blood pressure, and heart disease risks
+- Check blood glucose and BMI more often for people older than 55 years of age, whether they show symptoms or not
+- Invest in stop-smoking programs as the easiest to modify risk factor in terms of lifestyle choices
+- Verify the model using another real-world population sample before applying it clinically
+- Further investigate SHAP values and probability calibration in the future
+
+---
+
+## Future Work
+
+- **External validation**: Conduct validation using an independent set of patients with natural class imbalance to determine generalisability in real-life settings
+- **Interpretation via SHAP**: Patient-wise interpretation of risk factors — essential for the adoption of machine learning-based clinical applications
+- **Probability calibration**: Generate calibrated probability scores to enable doctors to calculate stroke probabilities instead of binary alerts
+- **Temporal modelling**: Consider longitudinal trajectories of features including blood pressure, glucose level, and BMI instead of taking snapshots
+
+---
+
+## References
+
+[1] World Health Organization, "Stroke, Cerebrovascular accident," WHO, 2023.  
+[2] Centers for Disease Control and Prevention, "Stroke Facts and Statistics," CDC, 2023.  
+[3] Global Burden of Disease Study, "Global, regional, and national burden of stroke," *The Lancet Neurology*, 2021.  
+[4] S. K. Pandey et al., "Machine learning techniques for stroke prediction: A review," *IEEE Access*, 2020.  
+[5] N. V. Chawla et al., "SMOTE: Synthetic minority over-sampling technique," *Journal of Artificial Intelligence Research*, 2002.  
+[6] T. Chen and C. Guestrin, "XGBoost: A scalable tree boosting system," *KDD*, 2016.
+
+---
+
+## Appendix: Contribution Statement
+
+| Name | Student ID | Primary Contributions |
+|---|---|---|
+| R.P.M. Vithanage | 230674A | Dataset understanding, data cleaning, duplicate detection and removal, missing value imputation, dataset validation, report drafting |
+| S.E.N. Silva | 230615V | Exploratory Data Analysis (EDA), visualisations, statistical analysis (hypothesis testing, correlation analysis), results interpretation and documentation |
+| T.D.R. Silva | 230616B | Feature engineering, preprocessing pipeline design, encoding, leakage prevention, data splitting strategy, methodology documentation |
+| S.V.C.H. Vithanage | 230675D | Model development (LR, RF, XGBoost), ensemble methods (voting, stacking), threshold tuning, performance evaluation, model results analysis and reporting |
+
+All members contributed to discussions, validation of results, and final review of the report.

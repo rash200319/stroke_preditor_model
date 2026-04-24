@@ -451,7 +451,9 @@ The visual analysis, statistical testing, and feature importance analysis all re
 
 | Name | Student ID | Primary Contributions |
 |---|---|---|
-| R.P.M. Vithanage | 230674A | Data collection, data cleaning, duplicate detection and removal, missing value imputation, dataset validation,report writing |
-| S.E.N. Silva | 230615V | Exploratory Data Analysis (EDA), visualisations, statistical analysis (hypothesis testing, correlation analysis), report writing |
-| T.D.R. Silva | 230616B | Feature engineering, preprocessing pipeline design, encoding, leakage prevention, data splitting strategy,report writing |
-| S.V.C.H. Vithanage | 230675D | Model development (LR, RF, XGBoost), ensemble methods (voting, stacking), threshold tuning, performance evaluation, report writing |
+| R.P.M. Vithanage | 230674A | Dataset understanding, data cleaning, duplicate detection and removal, missing value imputation, dataset validation, report drafting |
+| S.E.N. Silva | 230615V | Exploratory Data Analysis (EDA), visualisations, statistical analysis (hypothesis testing, correlation analysis), results interpretation and documentation |
+| T.D.R. Silva | 230616B | Feature engineering, preprocessing pipeline design, encoding, leakage prevention, data splitting strategy, methodology documentation |
+| S.V.C.H. Vithanage | 230675D | Model development (LR, RF, XGBoost), ensemble methods (voting, stacking), threshold tuning, performance evaluation, model results analysis and reporting |
+
+All members contributed to discussions, validation of results, and final review of the report.

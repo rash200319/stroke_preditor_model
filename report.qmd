@@ -26,16 +26,17 @@ format:
 
 | Name | Student ID | Primary Contributions |
 |---|---|---|
-| R.P.M. Vithanage | [ID] | Data cleaning, deduplication, BMI imputation, EDA |
-| S.E.N. S. Silva | [ID] | Statistical testing, feature engineering, visualisations, modelling |
-
+| R.P.M. Vithanage | 230674A | Data collection, data cleaning, duplicate detection and removal, missing value imputation, dataset validation,report writing |
+| S.E.N. Silva | 230615V | Exploratory Data Analysis (EDA), visualisations, statistical analysis (hypothesis testing, correlation analysis), report writing |
+| T.D.R. Silva | 230616B | Feature engineering, preprocessing pipeline design, encoding, leakage prevention, data splitting strategy,report writing |
+| S.V.C.H. Vithanage | 230675D | Model development (LR, RF, XGBoost), ensemble methods (voting, stacking), threshold tuning, performance evaluation, report writing |
 ---
 
 ## Abstract
 
-This report presents a stroke risk prediction study built on patient health and lifestyle data. The original dataset contained 9,722 records, but deduplication revealed 4,612 exact clinical duplicates that had artificially inflated the stroke positive class. After correction, the true dataset contains 5,110 unique patients with a stroke prevalence of 4.87%, consistent with published real-world clinical rates.
+This report presents a stroke risk prediction study built on patient health and lifestyle data. The original dataset contained 9,722 records, but deduplication revealed 4,612 exact clinical duplicates that had artificially inflated the stroke positive class. After correction, the true dataset contains 5,110 unique patients with a stroke prevalence of 4.87%, consistent with published real world clinical rates.
 
-The analysis combines exploratory data analysis, statistical hypothesis testing, feature engineering, and a leakage-safe machine learning pipeline. Five models are evaluated: Logistic Regression, Random Forest, XGBoost, Soft Voting Ensemble, and a Stacking Ensemble using out-of-fold meta learning. Under a clinically appropriate High Sensitivity operating mode, Logistic Regression achieves the highest recall (0.940), missing only 3 stroke patients out of 50 in the test set. The Stacking Ensemble achieves the best overall precision-recall performance (AUC-PR = 0.215). A key finding is that simpler regularised models can outperform gradient boosting on recall when the minority class is small, due to the bias variance tradeoff.
+The analysis combines exploratory data analysis, statistical hypothesis testing, feature engineering, and a leakage-safe machine learning pipeline. Five models are evaluated: Logistic Regression, Random Forest, XGBoost, Soft Voting Ensemble, and a Stacking Ensemble using out of fold meta learning. Under a clinically appropriate High Sensitivity operating mode, Logistic Regression achieves the highest recall (0.940), missing only 3 stroke patients out of 50 in the test set. The Stacking Ensemble achieves the best overall precision recall performance (AUC-PR = 0.215). A key finding is that simpler regularised models can outperform gradient boosting on recall when the minority class is small, due to the bias variance tradeoff.
 
 ---
 
@@ -43,9 +44,7 @@ The analysis combines exploratory data analysis, statistical hypothesis testing,
 
 ### 1.1 Background and Motivation
 
-Stroke is a major global health problem and a leading cause of death and long-term disability. The World Health Organization estimates that approximately 15 million people experience a stroke each year, with roughly 5 million deaths and another 5 million people left permanently disabled. Stroke can cause paralysis, speech impairment, cognitive dysfunction, and vision loss, placing a significant and growing burden on healthcare systems worldwide.
-
-Early identification of patients at high stroke risk allows clinicians to intervene before a cerebrovascular event occurs, reducing both clinical severity and long term rehabilitation costs. Despite advances in medical data collection, transforming large volumes of patient records into actionable risk predictions remains a central challenge in healthcare analytics.
+Stroke is a major global health issue and a leading reason of death and long-term disability, affecting around 15 million people each year. Strokes generally results in severe complications such as paralysis, speech impairment, and cognitive decline. Early identification of high risk patients is crucial for preventing strokes and to reduce their impact. However, converting large volumes of medical data into accurate and actionable risk predictions remains a key challenge in healthcare analytics.
 
 ### 1.2 Problem Statement
 
@@ -53,11 +52,11 @@ This study addresses the challenge of predicting stroke events using a dataset o
 
 - Develop a machine learning pipeline capable of accurately predicting stroke events in the presence of severe class imbalance
 - Identify the most clinically influential risk factors contributing to stroke occurrence
-- Generate evidence-based insights to support preventive healthcare strategies and early screening protocols
+- Generate evidence based insights to support preventive healthcare strategies and early screening protocols
 
 ### 1.3 Significance of the Study
 
-A key contribution of this study is the identification and correction of an artificial dataset imbalance. The original 9,722 records contain 4,612 exact clinical duplicates concentrated entirely in the stroke-positive class, inflating a naturally rare event to a misleadingly balanced 50/50 distribution. Models trained on this artificially balanced data produce inflated performance metrics that do not reflect real-world deployment conditions. This study works exclusively with the 5,110 deduplicated records, employing SMOTE oversampling, class-weight adjustment, and threshold tuning to address the genuine imbalance in a methodologically sound manner.
+A key contribution of this study is the identification and correction of an artificial dataset imbalance. The original 9,722 records contain 4,612 exact clinical duplicates concentrated entirely in the stroke-positive class, inflating a naturally rare event to a misleadingly balanced 50/50 distribution. Models trained on this artificially balanced data produce inflated performance metrics that do not reflect real world deployment conditions. This study works exclusively with the 5,110 deduplicated records, employing SMOTE oversampling, class weight adjustment, and threshold tuning to address the genuine imbalance in a methodologically sound manner.
 
 ---
 
@@ -89,7 +88,7 @@ The dataset contains 17 variables covering demographics, medical history, lifest
 
 ### 2.2 Data Integrity: Duplicate Detection and Removal
 
-The original file contains 9,722 rows. After removing duplicates by comparing all clinical fields except `patient_id`, the dataset reduces to 5,110 unique patients. This correction is critical because the duplicates were concentrated entirely in the stroke-positive class. Keeping them would constitute data leakage; the model would be trained and tested on identical records, artificially inflating all performance metrics.
+The original file contains 9,722 rows. After removing duplicates by comparing all clinical fields except `patient_id`, the dataset reduces to 5,110 unique patients. This correction is critical because the duplicates were concentrated entirely in the stroke positive class. Keeping them would constitute data leakage; the model would be trained and tested on identical records, artificially inflating all performance metrics.
 
 After deduplication, the true distribution is:
 
@@ -100,7 +99,7 @@ This prevalence is consistent with published real-world stroke incidence rates o
 
 ### 2.3 Feature Engineering
 
-Seven interaction and transformation features were engineered prior to the train-test split, capturing clinically meaningful non-linear relationships that raw features cannot represent independently:
+Seven interaction and transformation features were engineered prior to the train test split, capturing clinically meaningful non linear relationships that raw features cannot represent independently:
 
 | Feature | Formula | Clinical Rationale |
 |---|---|---|
@@ -129,7 +128,7 @@ These columns are either redundant or too closely tied to the target to be safe 
 
 ### 2.6 Categorical Encoding
 
-All categorical variables were label encoded using scikit-learn's `LabelEncoder` fitted on training data only. The four encoded features are: `gender`, `employment_type`, `residence`, and `smoking_habit`. Standard scaling was not applied to tree-based models (Random Forest, XGBoost), which are invariant to feature scale. Logistic Regression used `class_weight='balanced'` as a built-in mechanism to handle the imbalanced target.
+All categorical variables were label encoded using scikit-learn's `LabelEncoder` fitted on training data only. The four encoded features are: `gender`, `employment_type`, `residence`, and `smoking_habit`. Standard scaling was not applied to tree-based models (Random Forest, XGBoost), which are invariant to feature scale. Logistic Regression used `class_weight='balanced'` as a built in mechanism to handle the imbalanced target.
 
 ---
 
@@ -143,7 +142,7 @@ The corrected dataset shows the true clinical imbalance: 4,861 non-stroke cases 
 
 ### 3.2 Numeric Feature Distributions
 
-Age, glucose level, and BMI all show visible differences between stroke and non-stroke patients. Age is the clearest separator, with stroke patients concentrated in the 60–80 age range. Glucose and BMI exhibit right-skewed distributions that justify the log transformation and interaction features included in the engineering step.
+Age, glucose level, and BMI all show visible differences between stroke and non stroke patients. Age is the clearest separator, with stroke patients concentrated in the 60–80 age range. Glucose and BMI exhibit right skewed distributions that justify the log transformation and interaction features included in the engineering step.
 
 | Feature | Mean (No Stroke) | Mean (Stroke) | Difference |
 |---|---|---|---|
@@ -190,7 +189,7 @@ The correlation matrix confirms that `age` is the strongest single numeric predi
 
 ### 4.1 Hypothesis Testing
 
-Non-parametric Mann-Whitney U tests were used for continuous variables and chi-square tests for categorical variables. Mann-Whitney was preferred over the independent samples t-test due to non-normal distributions observed in `age` and `glucose_level`.
+Non parametric Mann-Whitney U tests were used for continuous variables and chi-square tests for categorical variables. Mann-Whitney was preferred over the independent samples t-test due to non normal distributions observed in `age` and `glucose_level`.
 
 ![Summary visualisation of statistical test results across all features.](visuals/06_statistical_tests.png){fig-alt="Statistical tests summary"}
 
@@ -212,7 +211,7 @@ Non-parametric Mann-Whitney U tests were used for continuous variables and chi-s
 
 The statistical tests support the feature engineering strategy directly. Age is not only the strongest raw predictor but also benefits from nonlinear transformation; `age_squared` achieves a higher correlation with the target than raw `age`. Cardiovascular burden works better as a combined indicator (`cvd_count`) than as isolated binary flags.
 
-Gender and residence do not show statistically significant independent associations with stroke. Despite this, both features appear in the upper middle range of XGBoost feature importance. This is explained by the fact that XGBoost captures interaction effects and non-linear splits involving these features, even when their marginal correlation with the target is low. Model-based feature importance measures predictive contribution within the model rather than independent statistical association.
+Gender and residence do not show statistically significant independent associations with stroke. Despite this, both features appear in the upper middle range of XGBoost feature importance. This is explained by the fact that XGBoost captures interaction effects and non-linear splits involving these features, even when their marginal correlation with the target is low. Model based feature importance measures predictive contribution within the model rather than independent statistical association.
 
 ---
 
@@ -238,15 +237,15 @@ Five prediction strategies are evaluated:
 | Soft Voting | Probability averaging | Mean of LR + RF + XGB probabilities | Inherited from base models |
 | Stacking Ensemble | Meta-learning | LR meta-learner on 5-fold OOF predictions | class_weight='balanced' (meta) |
 
-### 5.3 Stacking Design: Out-of-Fold Meta-Learning
+### 5.3 Stacking Design: Out of Fold Meta Learning
 
-The stacking ensemble uses out-of-fold (OOF) predictions to prevent target leakage in the meta-learning stage. Under 5-fold stratified cross validation, each base model trains on 4 folds and generates probability predictions for the held-out 5th fold. The concatenated OOF predictions form a (n_train × 3) meta feature matrix used to train the Logistic Regression meta-learner. Test predictions are averaged across all 5 fold models per base learner. This design ensures the meta-learner never trains on targets it has already seen.
+The stacking ensemble uses out of fold (OOF) predictions to prevent target leakage in the meta-learning stage. Under 5-fold stratified cross validation, each base model trains on 4 folds and generates probability predictions for the held out 5th fold. The concatenated OOF predictions form a (n_train × 3) meta feature matrix used to train the Logistic Regression meta-learner. Test predictions are averaged across all 5 fold models per base learner. This design ensures the meta-learner never trains on targets it has already seen.
 
 ### 5.4 Threshold Tuning
 
 Instead of using the default 0.50 cutoff, thresholds are tuned on a held-out validation set (16% of total data) using a grid search from 0.01 to 0.99. Two operating modes are defined:
 
-- **High Sensitivity mode** (min_precision = 0.08): Maximises recall subject to precision ≥ 0.08. For every 12 patients flagged for stroke risk, at least 1 must be a true case. Designed for population-level screening where missing a stroke is catastrophic.
+- **High Sensitivity mode** (min_precision = 0.08): Maximises recall subject to precision ≥ 0.08. For every 12 patients flagged for stroke risk, at least 1 must be a true case. Designed for population level screening where missing a stroke is catastrophic.
 - **Balanced mode** (min_precision = 0.10): Maximises F1-score subject to precision ≥ 0.10. Suited for clinical settings where false positives carry non-trivial follow-up costs.
 
 ### 5.5 Data Split Strategy
@@ -308,7 +307,7 @@ The Balanced mode results confirm that Stacking Ensemble is the superior model w
 
 ![ROC curves (left), Precision-Recall curves (centre), and XGBoost feature importance (right) for all five models. The Stacking Ensemble achieves the highest AUC-PR (0.215).](visuals/stroke_ensemble_roc_pr_fi.png){fig-alt="ROC, PR, and feature importance plot"}
 
-The Precision-Recall curves are the primary performance indicator for this imbalanced dataset — they directly measure the precision-recall tradeoff on the minority class, unlike ROC curves which can appear favourable even when performance on the minority class is poor. The Stacking Ensemble (red dashed) achieves the highest Average Precision of 0.215, which is 4.4 times above the naive baseline (4.9% prevalence).
+The Precision-Recall curves are the primary performance indicator for this imbalanced dataset, they directly measure the precision recall tradeoff on the minority class, unlike ROC curves which can appear favourable even when performance on the minority class is poor. The Stacking Ensemble (red dashed) achieves the highest Average Precision of 0.215, which is 4.4 times above the naive baseline (4.9% prevalence).
 
 ### 6.3 Confusion Matrices
 
@@ -317,14 +316,14 @@ The Precision-Recall curves are the primary performance indicator for this imbal
 **Clinical interpretation of confusion matrices:**
 
 - **Logistic Regression**: 43 strokes caught, 3 missed, 546 false alarms. Best recall but highest false alarm rate. Optimal for maximum sensitivity screening.
-- **Stacking Ensemble**: 46 strokes caught, 4 missed, 516 false alarms. Best AUC-PR and second-highest recall. Optimal for overall precision-recall balance.
+- **Stacking Ensemble**: 46 strokes caught, 4 missed, 516 false alarms. Best AUC-PR and second-highest recall. Optimal for overall precision recall balance.
 - **XGBoost alone**: 23 strokes caught, 27 missed. Only 114 false alarms but misses more than half of all stroke patients — unsuitable as a screening model despite high individual precision.
 
 ### 6.4 Threshold Sensitivity Analysis
 
 ![Threshold sweep for the Stacking Ensemble on the test set. Black dashed line (thr=0.12) marks High Sensitivity operating point. Purple dashed line (thr=0.67) marks Balanced operating point.](visuals/stroke_ensemble_threshold_sweep.png){fig-alt="Threshold sweep for stacking"}
 
-The threshold sweep reveals that the Stacking Ensemble maintains recall above 0.80 for any threshold below approximately 0.67, demonstrating robust sensitivity across a wide operating range. The precision floor of 0.08 (orange dotted line) ensures the model remains clinically viable — at thresholds below this floor, nearly all patients are flagged, which is operationally unworkable. The plateau of stable high recall between threshold 0.12 and 0.67 gives clinical teams flexibility to adjust the operating point based on available follow-up capacity.
+The threshold sweep reveals that the Stacking Ensemble maintains recall above 0.80 for any threshold below approximately 0.67, demonstrating robust sensitivity across a wide operating range. The precision floor of 0.08 (orange dotted line) ensures the model remains clinically viable, at thresholds below this floor, nearly all patients are flagged, which is operationally unworkable. The plateau of stable high recall between threshold 0.12 and 0.67 gives clinical teams flexibility to adjust the operating point based on available follow-up capacity.
 
 ### 6.5 XGBoost Feature Importance
 
@@ -398,7 +397,7 @@ A two-stage protocol is recommended: the model flags high-risk patients as a fir
 
 ## 8. Limitations
 
-- **Small minority class**: With only 249 genuine stroke cases, complex models cannot learn reliable minority-class decision boundaries. More stroke data would significantly improve all models.
+- **Small minority class**: With only 249 genuine stroke cases, complex models cannot learn reliable minority class decision boundaries. More stroke data would significantly improve all models.
 - **Single-source dataset**: External validation on an independent cohort from a different healthcare setting is required before clinical deployment.
 - **No temporal data**: The dataset is a single-timepoint snapshot. Longitudinal tracking of changes in blood pressure, glucose, and BMI would substantially improve predictive power.
 - **Unknown smoking status**: A significant proportion of patients have `smoking_habit = unknown`, limiting the model's ability to fully leverage this modifiable risk factor.
@@ -408,11 +407,11 @@ A two-stage protocol is recommended: the model flags high-risk patients as a fir
 
 ## 9. Conclusion
 
-This project develops a leakage-safe stroke prediction workflow on a genuinely imbalanced dataset of 5,110 unique patients following the detection and removal of 4,612 artificially duplicated records. The pipeline addresses the 4.87% stroke prevalence through SMOTE oversampling, class-weight adjustment, and validation-set threshold tuning — three complementary strategies for handling the 19.5:1 class imbalance.
+This project develops a leakage safe stroke prediction workflow on a genuinely imbalanced dataset of 5,110 unique patients following the detection and removal of 4,612 artificially duplicated records. The pipeline addresses the 4.87% stroke prevalence through SMOTE oversampling, class-weight adjustment, and validation-set threshold tuning — three complementary strategies for handling the 19.5:1 class imbalance.
 
-Five models were trained and evaluated. Under the High Sensitivity operating mode, Logistic Regression achieved the highest recall (0.940) with only 3 missed stroke cases. The Stacking Ensemble achieved the best overall precision-recall performance (AUC-PR = 0.215) with recall of 0.920. The finding that a simpler regularised linear model outperforms complex boosting individually on recall — due to the bias-variance tradeoff under small minority class conditions — is a meaningful methodological insight for healthcare machine learning practitioners.
+Five models were trained and evaluated. Under the High Sensitivity operating mode, Logistic Regression achieved the highest recall (0.940) with only 3 missed stroke cases. The Stacking Ensemble achieved the best overall precision-recall performance (AUC-PR = 0.215) with recall of 0.920. The finding that a simpler regularised linear model outperforms complex boosting individually on recall — due to the bias-variance tradeoff under small minority class conditions, is a meaningful methodological insight for healthcare machine learning practitioners.
 
-The visual analysis, statistical testing, and feature importance analysis all reinforce the same clinical conclusion: age and cardiovascular burden dominate stroke risk in this dataset, with non-linear and interaction features providing the most discriminatory predictive signal.
+The visual analysis, statistical testing, and feature importance analysis all reinforce the same clinical conclusion: age and cardiovascular burden dominate stroke risk in this dataset, with non linear and interaction features providing the most discriminatory predictive signal.
 
 ---
 
@@ -450,7 +449,11 @@ The visual analysis, statistical testing, and feature importance analysis all re
 
 ## Appendix: Contribution Statement
 
-| Member Name | Student ID | Primary Contributions |
+## Appendix: Contribution Statement
+
+| Name | Student ID | Primary Contributions |
 |---|---|---|
-| R.P.M. Vithanage | [ID] | Data cleaning, deduplication, BMI imputation, EDA, statistical testing |
-| S.E.N. S. Silva | [ID] | Feature engineering, model development, ensemble design, threshold tuning, visualisations, report writing |
+| R.P.M. Vithanage | 230674A | Data collection, data cleaning, duplicate detection and removal, missing value imputation, dataset validation,report writing |
+| S.E.N. Silva | 230615V | Exploratory Data Analysis (EDA), visualisations, statistical analysis (hypothesis testing, correlation analysis), report writing |
+| T.D.R. Silva | 230616B | Feature engineering, preprocessing pipeline design, encoding, leakage prevention, data splitting strategy,report writing |
+| S.V.C.H. Vithanage | 230675D | Model development (LR, RF, XGBoost), ensemble methods (voting, stacking), threshold tuning, performance evaluation, report writing |

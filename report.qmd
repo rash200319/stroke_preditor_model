@@ -40,13 +40,13 @@ The analysis combines exploratory data analysis, statistical hypothesis testing,
 
 ---
 
-## 1. Introduction
+## Introduction
 
-### 1.1 Background and Motivation
+### Background and Motivation
 
 Stroke is a major global health issue and a leading reason of death and long-term disability, affecting around 15 million people each year. Strokes generally results in severe complications such as paralysis, speech impairment, and cognitive decline. Early identification of high risk patients is crucial for preventing strokes and to reduce their impact. However, converting large volumes of medical data into accurate and actionable risk predictions remains a key challenge in healthcare analytics.
 
-### 1.2 Problem Statement
+### Problem Statement
 
 This study addresses the challenge of predicting stroke events using a dataset of 9,722 patient records collected by a healthcare organisation. After removing duplicate records introduced through an artificial balancing procedure, the true dataset contains 5,110 unique patients with a stroke prevalence of 4.87%. The analysis addresses three core objectives:
 
@@ -54,15 +54,15 @@ This study addresses the challenge of predicting stroke events using a dataset o
 - Identify the most clinically influential risk factors contributing to stroke occurrence
 - Generate evidence based insights to support preventive healthcare strategies and early screening protocols
 
-### 1.3 Significance of the Study
+### Significance of the Study
 
 A key contribution of this study is the identification and correction of an artificial dataset imbalance. The original 9,722 records contain 4,612 exact clinical duplicates concentrated entirely in the stroke-positive class, inflating a naturally rare event to a misleadingly balanced 50/50 distribution. Models trained on this artificially balanced data produce inflated performance metrics that do not reflect real world deployment conditions. This study works exclusively with the 5,110 deduplicated records, employing SMOTE oversampling, class weight adjustment, and threshold tuning to address the genuine imbalance in a methodologically sound manner.
 
 ---
 
-## 2. Dataset and Preprocessing
+## Dataset and Preprocessing
 
-### 2.1 Dataset Description
+### Dataset Description
 
 The dataset contains 17 variables covering demographics, medical history, lifestyle habits, and clinical measurements, with `stroke_event` as the binary target variable.
 
@@ -86,7 +86,7 @@ The dataset contains 17 variables covering demographics, medical history, lifest
 | `risk_score` | Ordinal | Composite health risk score (0–2) | Excluded (leakage risk) |
 | `stroke_event` | Binary (Target) | Stroke occurrence (1 = Yes, 0 = No) | Target variable |
 
-### 2.2 Data Integrity: Duplicate Detection and Removal
+###  Data Integrity: Duplicate Detection and Removal
 
 The original file contains 9,722 rows. After removing duplicates by comparing all clinical fields except `patient_id`, the dataset reduces to 5,110 unique patients. This correction is critical because the duplicates were concentrated entirely in the stroke positive class. Keeping them would constitute data leakage; the model would be trained and tested on identical records, artificially inflating all performance metrics.
 
@@ -97,7 +97,7 @@ After deduplication, the true distribution is:
 
 This prevalence is consistent with published real-world stroke incidence rates of 2–5%, validating the deduplication as clinically appropriate. A `risk_score` of 2 showed an 84.5% stroke rate and `lifestyle_risk = medium` showed 62.6%, both disproportionately high, indicating these composite columns may have been constructed using stroke-adjacent information. They were excluded from all modelling.
 
-### 2.3 Feature Engineering
+###  Feature Engineering
 
 Seven interaction and transformation features were engineered prior to the train test split, capturing clinically meaningful non linear relationships that raw features cannot represent independently:
 
@@ -111,13 +111,13 @@ Seven interaction and transformation features were engineered prior to the train
 | `glucose_x_bmi` | glucose × bmi | Joint metabolic risk of hyperglycaemia and obesity |
 | `log_glucose` | log(glucose + 1) | Normalises the right-skewed glucose distribution |
 
-### 2.4 Missing Value Imputation
+###  Missing Value Imputation
 
 After deduplication, 201 records (3.93%) have missing `bmi_value`. A grouped median imputation strategy was applied, filling each missing value with the median BMI of patients sharing the same gender and age group (young: age < 40, middle: 40–60, senior: > 60). This approach is more biologically accurate than a global median. Crucially, imputation statistics are computed exclusively from training data and applied to test data separately, preventing any form of imputation leakage across the train-test boundary.
 
 Forward fill and backward fill were considered but rejected; these are appropriate only for timeseries data where adjacent observations are temporally related. Patient records in this dataset are independent.
 
-### 2.5 Leakage Prevention
+###  Leakage Prevention
 
 Two categories of features were excluded from all modelling:
 
@@ -126,21 +126,21 @@ Two categories of features were excluded from all modelling:
 
 These columns are either redundant or too closely tied to the target to be safe for honest prediction.
 
-### 2.6 Categorical Encoding
+###  Categorical Encoding
 
 All categorical variables were label encoded using scikit-learn's `LabelEncoder` fitted on training data only. The four encoded features are: `gender`, `employment_type`, `residence`, and `smoking_habit`. Standard scaling was not applied to tree-based models (Random Forest, XGBoost), which are invariant to feature scale. Logistic Regression used `class_weight='balanced'` as a built in mechanism to handle the imbalanced target.
 
 ---
 
-## 3. Exploratory Data Analysis
+##  Exploratory Data Analysis
 
-### 3.1 Class Balance
+###  Class Balance
 
 The corrected dataset shows the true clinical imbalance: 4,861 non-stroke cases (95.13%) and 249 stroke cases (4.87%).
 
 ![Class balance bar chart showing the true imbalanced distribution after deduplication.](visuals/01_class_balance.png){fig-alt="Class balance bar chart"}
 
-### 3.2 Numeric Feature Distributions
+###  Numeric Feature Distributions
 
 Age, glucose level, and BMI all show visible differences between stroke and non stroke patients. Age is the clearest separator, with stroke patients concentrated in the 60–80 age range. Glucose and BMI exhibit right skewed distributions that justify the log transformation and interaction features included in the engineering step.
 
@@ -152,19 +152,19 @@ Age, glucose level, and BMI all show visible differences between stroke and non 
 
 ![Numeric feature distributions split by stroke status, showing clearly shifted age and glucose distributions.](visuals/02_numeric_distributions.png){fig-alt="Numeric distribution plots"}
 
-### 3.3 Categorical Patterns
+###  Categorical Patterns
 
 Stroke prevalence varies across groups for smoking, employment, residence, and gender. Patients with `smoking_habit = unknown` show a stroke rate comparable to current smokers, suggesting this category may capture patients reluctant to disclose their status due to existing health concerns. Gender and residence show limited independent association but contribute through interaction effects.
 
 ![Categorical feature counts split by stroke status.](visuals/03_categorical_counts.png){fig-alt="Categorical count plots"}
 
-### 3.4 Boxplots by Stroke Status
+###  Boxplots by Stroke Status
 
 Boxplots confirm the shift in age and glucose for the stroke class. BMI shows more overlap between groups but still contributes predictive signal, particularly through the `glucose_x_bmi` engineered feature.
 
 ![Boxplots of numerical features by stroke status, highlighting the age and glucose separation.](visuals/04_boxplots.png){fig-alt="Boxplots by stroke status"}
 
-### 3.5 Correlation Analysis
+###  Correlation Analysis
 
 The correlation matrix confirms that `age` is the strongest single numeric predictor (r = 0.243). Among engineered features, `age_squared` achieves r = 0.272, the highest correlation with the target of any single feature, validating the polynomial age transformation. The `age_x_hypertension` interaction (r = 0.141) outperforms either component feature independently, confirming the clinical value of the interaction term.
 
@@ -185,9 +185,9 @@ The correlation matrix confirms that `age` is the strongest single numeric predi
 
 ---
 
-## 4. Statistical Analysis
+## Statistical Analysis
 
-### 4.1 Hypothesis Testing
+### Hypothesis Testing
 
 Non parametric Mann-Whitney U tests were used for continuous variables and chi-square tests for categorical variables. Mann-Whitney was preferred over the independent samples t-test due to non normal distributions observed in `age` and `glucose_level`.
 
@@ -207,7 +207,7 @@ Non parametric Mann-Whitney U tests were used for continuous variables and chi-s
 | `gender` | Chi-Square | ~0.12 | — | No significant independent association |
 | `residence` | Chi-Square | ~0.18 | — | No significant independent association |
 
-### 4.2 Statistical Inference
+### Statistical Inference
 
 The statistical tests support the feature engineering strategy directly. Age is not only the strongest raw predictor but also benefits from nonlinear transformation; `age_squared` achieves a higher correlation with the target than raw `age`. Cardiovascular burden works better as a combined indicator (`cvd_count`) than as isolated binary flags.
 
@@ -215,9 +215,9 @@ Gender and residence do not show statistically significant independent associati
 
 ---
 
-## 5. Modelling Approach
+##  Modelling Approach
 
-### 5.1 Handling Class Imbalance
+###  Handling Class Imbalance
 
 The class ratio is approximately 19.5:1. Three complementary strategies are employed:
 
@@ -225,7 +225,7 @@ The class ratio is approximately 19.5:1. Three complementary strategies are empl
 - **`class_weight='balanced'`** (Logistic Regression and Random Forest): Automatically adjusts class weights inversely proportional to class frequency.
 - **`scale_pos_weight`** (XGBoost only): Set to the training class ratio (~19.5), penalising missed stroke predictions more heavily during gradient computation.
 
-### 5.2 Model Definitions
+###  Model Definitions
 
 Five prediction strategies are evaluated:
 
@@ -237,18 +237,18 @@ Five prediction strategies are evaluated:
 | Soft Voting | Probability averaging | Mean of LR + RF + XGB probabilities | Inherited from base models |
 | Stacking Ensemble | Meta-learning | LR meta-learner on 5-fold OOF predictions | class_weight='balanced' (meta) |
 
-### 5.3 Stacking Design: Out of Fold Meta Learning
+###  Stacking Design: Out of Fold Meta Learning
 
 The stacking ensemble uses out of fold (OOF) predictions to prevent target leakage in the meta-learning stage. Under 5-fold stratified cross validation, each base model trains on 4 folds and generates probability predictions for the held out 5th fold. The concatenated OOF predictions form a (n_train × 3) meta feature matrix used to train the Logistic Regression meta learner. Test predictions are averaged across all 5 fold models per base learner. This design ensures the meta learner never trains on targets it has already seen.
 
-### 5.4 Threshold Tuning
+### Threshold Tuning
 
 Instead of using the default 0.50 cutoff, thresholds are tuned on a held-out validation set (16% of total data) using a grid search from 0.01 to 0.99. Two operating modes are defined:
 
 - **High Sensitivity mode** (min_precision = 0.08): Maximises recall subject to precision ≥ 0.08. For every 12 patients flagged for stroke risk, at least 1 must be a true case. Designed for population level screening where missing a stroke is catastrophic.
 - **Balanced mode** (min_precision = 0.10): Maximises F1-score subject to precision ≥ 0.10. Suited for clinical settings where false positives carry non-trivial follow-up costs.
 
-### 5.5 Data Split Strategy
+### Data Split Strategy
 
 A three way split was used to ensure complete separation of model training, threshold selection, and final evaluation:
 
@@ -258,7 +258,7 @@ A three way split was used to ensure complete separation of model training, thre
 | Validation | 818 (16%) | ~40 (4.9%) | Threshold tuning: never used for model training |
 | Test | 1,022 (20%) | 50 (4.9%) | Final evaluation: held out throughout all modelling stages |
 
-### 5.6 Evaluation Metrics
+###  Evaluation Metrics
 
 Given the clinical context, metrics are prioritised as follows:
 
@@ -273,13 +273,13 @@ Given the clinical context, metrics are prioritised as follows:
 
 ---
 
-## 6. Final Results
+##  Final Results
 
-### 6.1 Model Performance Comparison
+###  Model Performance Comparison
 
 ![Model metric heatmap comparing all five models across key evaluation metrics.](visuals/07_model_metric_heatmap.png){fig-alt="Model metric heatmap"}
 
-**Table 6.1: Final Test Set Results — High Sensitivity Mode (n=1,022, 50 stroke cases)**
+**Table 8.1: Final Test Set Results — High Sensitivity Mode (n=1,022, 50 stroke cases)**
 
 | Model | Threshold | AUC-ROC | AUC-PR | Recall | Precision | F1 | Missed (FN) | False Alarms (FP) |
 |---|---|---|---|---|---|---|---|---|
@@ -291,7 +291,7 @@ Given the clinical context, metrics are prioritised as follows:
 
 > All thresholds were determined exclusively on the validation set. Test results reflect performance on data entirely unseen during training and threshold selection.
 
-**Table 6.2: Final Test Set Results — Balanced Mode**
+**Table 8.2: Final Test Set Results — Balanced Mode**
 
 | Model | Threshold | AUC-ROC | AUC-PR | Recall | Precision | F1 |
 |---|---|---|---|---|---|---|
@@ -303,13 +303,13 @@ Given the clinical context, metrics are prioritised as follows:
 
 The Balanced mode results confirm that Stacking Ensemble is the superior model when both precision and recall are weighted: it achieves the highest F1 (0.311) while maintaining strong recall (0.780).
 
-### 6.2 ROC Curves, Precision-Recall Curves, and Feature Importance
+### ROC Curves, Precision-Recall Curves, and Feature Importance
 
 ![ROC curves (left), Precision-Recall curves (centre), and XGBoost feature importance (right) for all five models. The Stacking Ensemble achieves the highest AUC-PR (0.215).](visuals/stroke_ensemble_roc_pr_fi.png){fig-alt="ROC, PR, and feature importance plot"}
 
 The Precision-Recall curves are the primary performance indicator for this imbalanced dataset, they directly measure the precision recall tradeoff on the minority class, unlike ROC curves which can appear favourable even when performance on the minority class is poor. The Stacking Ensemble (red dashed) achieves the highest Average Precision of 0.2278, which is 4.7 times above the naive baseline (4.9% prevalence).
 
-### 6.3 Confusion Matrices
+### Confusion Matrices
 
 ![Confusion matrices for all five models under High Sensitivity operating mode. Logistic Regression (top-left) achieves recall=0.940 with only 3 missed strokes. Stacking Ensemble (bottom-right) achieves recall=0.920 with 4 missed strokes and the highest AUC-PR.](visuals/stroke_ensemble_confusion.png){fig-alt="Confusion matrices for all models"}
 
@@ -319,17 +319,17 @@ The Precision-Recall curves are the primary performance indicator for this imbal
 - **Stacking Ensemble**: 45 strokes caught, 5 missed, 498 false alarms. Best AUC-PR. Optimal for overall precision recall balance.
 - **XGBoost alone**: 20 strokes caught, 30 missed. Only 78 false alarms but misses 60% of all stroke patients — unsuitable as a screening model despite high individual precision.
 
-### 6.4 Threshold Sensitivity Analysis
+### Threshold Sensitivity Analysis
 
 ![Threshold sweep for the Stacking Ensemble on the test set. Black dashed line (thr=0.14) marks High Sensitivity operating point. Purple dashed line (thr=0.61) marks Balanced operating point.](visuals/stroke_ensemble_threshold_sweep.png){fig-alt="Threshold sweep for stacking"}
 
 The threshold sweep reveals that the Stacking Ensemble maintains recall above 0.80 for any threshold below approximately 0.61, demonstrating robust sensitivity across a wide operating range. The precision floor of 0.08 (orange dotted line) ensures the model remains clinically viable, at thresholds below this floor, nearly all patients are flagged, which is operationally unworkable. The plateau of stable high recall between threshold 0.14 and 0.61 gives clinical teams flexibility to adjust the operating point based on available follow-up capacity.
 
-### 6.5 XGBoost Feature Importance
+### XGBoost Feature Importance
 
 ![XGBoost feature importance ranked by gain metric, showing engineered features dominating the top ranks.](visuals/08_xgb_feature_importance.png){fig-alt="XGBoost feature importance"}
 
-**Table 6.3: Top 9 XGBoost Feature Importance Scores**
+**Table 8.3: Top 9 XGBoost Feature Importance Scores**
 
 | Rank | Feature | Importance | Type | Clinical Meaning |
 |---|---|---|---|---|
@@ -345,7 +345,7 @@ The threshold sweep reveals that the Stacking Ensemble maintains recall above 0.
 
 Three of the top four features are engineered rather than original clinical features. `age_squared` and `is_senior` together account for approximately 28.4% of total model importance, confirming that the non-linear and threshold effects of age contribute more predictive signal than the raw age value alone. `cvd_count` outperforms either of its component features independently, validating the clinical insight that cumulative cardiovascular burden is more predictive than any single comorbidity.
 
-### 6.6 Key Performance Interpretation
+### Key Performance Interpretation
 
 - Logistic Regression achieves the highest recall (0.960) in High Sensitivity mode: only 2 stroke patients missed from 50 in the test set
 - Stacking Ensemble gives the best overall AUC-PR (0.2278) and highest F1 in Balanced mode (0.2712)
@@ -355,15 +355,15 @@ Three of the top four features are engineered rather than original clinical feat
 
 ---
 
-## 7. Discussion
+##  Discussion
 
-### 7.1 Why Logistic Regression Outperforms XGBoost on Recall
+###  Why Logistic Regression Outperforms XGBoost on Recall
 
 The most striking result is that Logistic Regression outperforms XGBoost on recall (0.960 vs 0.400) despite XGBoost being a more complex algorithm. This is a direct manifestation of the bias-variance tradeoff under small minority class conditions. With only 249 genuine stroke training cases, XGBoost has insufficient minority-class data to reliably learn the complex non-linear decision boundaries that make gradient boosting superior on larger datasets. In this regime, the model exhibits high variance: it overfits to specific combinations of features seen in the 249 training stroke cases and fails to generalise. Logistic Regression, being a simpler regularised linear model, finds the dominant separating boundary (governed by age and comorbidity features) and extrapolates it more reliably to unseen stroke patients.
 
 This finding is consistent with established literature on medical machine learning: complex models do not always outperform simpler ones when minority class training data is scarce. It also explains why the Stacking Ensemble bridges the gap: by combining Logistic Regression's reliable linear boundary with Random Forest and XGBoost's non linear contributions, the meta-learner achieves better overall precision recall performance than any individual model alone.
 
-### 7.2 Clinical Interpretation of Key Findings
+###  Clinical Interpretation of Key Findings
 
 The strongest findings are consistent with established medical knowledge:
 
@@ -372,7 +372,7 @@ The strongest findings are consistent with established medical knowledge:
 - **Glucose and BMI** matter primarily through interaction terms. `glucose_x_bmi` captures the joint metabolic risk of hyperglycaemia and obesity — a subgroup for whom combined dietary and pharmacological intervention may yield the greatest stroke prevention benefit.
 - **Smoking status** adds useful signal, particularly where data quality is mixed. The `unknown` smoking category shows elevated stroke rates, likely capturing patients reluctant to disclose smoking status due to existing health concerns.
 
-### 7.3 High-Risk Patient Profile
+### High-Risk Patient Profile
 
 Synthesising EDA, statistical tests, and feature importance, four characteristics define the highest-risk profile:
 
@@ -383,7 +383,7 @@ Synthesising EDA, statistical tests, and feature importance, four characteristic
 
 Patients meeting three or four of these criteria represent the priority target for intensive stroke prevention programmes.
 
-### 7.4 Deployment Considerations
+### Deployment Considerations
 
 For screening use, a high-recall model is more useful than one optimised for precision. A precision of 0.08 in High Sensitivity mode means approximately 1 in 12 patients flagged for stroke risk is a confirmed case. This is clinically defensible for three reasons:
 
@@ -395,7 +395,7 @@ A two-stage protocol is recommended: the model flags high-risk patients as a fir
 
 ---
 
-## 8. Limitations
+## Limitations
 
 - **Small minority class**: With only 249 genuine stroke cases, complex models cannot learn reliable minority class decision boundaries. More stroke data would significantly improve all models.
 - **Single-source dataset**: External validation on an independent cohort from a different healthcare setting is required before clinical deployment.
@@ -405,7 +405,7 @@ A two-stage protocol is recommended: the model flags high-risk patients as a fir
 
 ---
 
-## 9. Conclusion
+## Conclusion
 
 This project develops a leakage safe stroke prediction workflow on a genuinely imbalanced dataset of 5,110 unique patients following the detection and removal of 4,612 artificially duplicated records. The pipeline addresses the 4.87% stroke prevalence through SMOTE oversampling, class-weight adjustment, and validation-set threshold tuning — three complementary strategies for handling the 19.5:1 class imbalance.
 
@@ -415,7 +415,7 @@ The visual analysis, statistical testing, and feature importance analysis all re
 
 ---
 
-## 10. Recommendations
+## Recommendations
 
 - Use the model as a screening aid, not a diagnostic replacement
 - Deploy a two-stage protocol: automated screening followed by clinical review of flagged patients
@@ -427,7 +427,7 @@ The visual analysis, statistical testing, and feature importance analysis all re
 
 ---
 
-## 11. Future Work
+## Future Work
 
 - **External validation**: Test on an independent patient cohort with natural class imbalance to assess real-world generalisability
 - **SHAP-based interpretability**: Individual patient-level risk factor explanation — critical for clinical acceptance and regulatory compliance of ML-based medical tools

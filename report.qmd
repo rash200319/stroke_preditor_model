@@ -24,12 +24,12 @@ format:
 **University:** University of Moratuwa  
 **Team Members:**
 
-| Name | Student ID | Primary Contributions |
-|---|---|---|
-| R.P.M. Vithanage | 230674A | Data collection, data cleaning, duplicate detection and removal, missing value imputation, dataset validation,report writing |
-| S.E.N. Silva | 230615V | Exploratory Data Analysis (EDA), visualisations, statistical analysis (hypothesis testing, correlation analysis), report writing |
-| T.D.R. Silva | 230616B | Feature engineering, preprocessing pipeline design, encoding, leakage prevention, data splitting strategy,report writing |
-| S.V.C.H. Vithanage | 230675D | Model development (LR, RF, XGBoost), ensemble methods (voting, stacking), threshold tuning, performance evaluation, report writing |
+| Name | Student ID  |
+|---|---|
+| R.P.M. Vithanage | 230674A |
+| S.E.N. Silva | 230615V |
+| T.D.R. Silva | 230616B |
+| S.V.C.H. Vithanage | 230675D |
 ---
 
 ## Abstract
@@ -211,7 +211,7 @@ Non parametric Mann-Whitney U tests were used for continuous variables and chi-s
 
 The statistical tests support the feature engineering strategy directly. Age is not only the strongest raw predictor but also benefits from nonlinear transformation; `age_squared` achieves a higher correlation with the target than raw `age`. Cardiovascular burden works better as a combined indicator (`cvd_count`) than as isolated binary flags.
 
-Gender and residence do not show statistically significant independent associations with stroke. Despite this, both features appear in the upper middle range of XGBoost feature importance. This is explained by the fact that XGBoost captures interaction effects and non-linear splits involving these features, even when their marginal correlation with the target is low. Model based feature importance measures predictive contribution within the model rather than independent statistical association.
+Gender and residence do not show statistically significant independent associations with stroke. Despite this, both features appear in the upper middle range of XGBoost feature importance. This is explained by the fact that XGBoost captures interaction effects and non linear splits involving these features, even when their marginal correlation with the target is low. Model based feature importance measures predictive contribution within the model rather than independent statistical association.
 
 ---
 
@@ -239,7 +239,7 @@ Five prediction strategies are evaluated:
 
 ### 5.3 Stacking Design: Out of Fold Meta Learning
 
-The stacking ensemble uses out of fold (OOF) predictions to prevent target leakage in the meta-learning stage. Under 5-fold stratified cross validation, each base model trains on 4 folds and generates probability predictions for the held out 5th fold. The concatenated OOF predictions form a (n_train × 3) meta feature matrix used to train the Logistic Regression meta-learner. Test predictions are averaged across all 5 fold models per base learner. This design ensures the meta-learner never trains on targets it has already seen.
+The stacking ensemble uses out of fold (OOF) predictions to prevent target leakage in the meta-learning stage. Under 5-fold stratified cross validation, each base model trains on 4 folds and generates probability predictions for the held out 5th fold. The concatenated OOF predictions form a (n_train × 3) meta feature matrix used to train the Logistic Regression meta learner. Test predictions are averaged across all 5 fold models per base learner. This design ensures the meta learner never trains on targets it has already seen.
 
 ### 5.4 Threshold Tuning
 
@@ -250,13 +250,13 @@ Instead of using the default 0.50 cutoff, thresholds are tuned on a held-out val
 
 ### 5.5 Data Split Strategy
 
-A three-way split was used to ensure complete separation of model training, threshold selection, and final evaluation:
+A three way split was used to ensure complete separation of model training, threshold selection, and final evaluation:
 
 | Split | Patients | Stroke Cases | Purpose |
 |---|---|---|---|
-| Inner Train | 3,270 (64%) | ~159 (4.9%) | Base model training, OOF stacking meta-features |
-| Validation | 818 (16%) | ~40 (4.9%) | Threshold tuning — never used for model training |
-| Test | 1,022 (20%) | 50 (4.9%) | Final evaluation — held out throughout all modelling stages |
+| Inner Train | 3,270 (64%) | ~159 (4.9%) | Base model training: OOF stacking meta-features |
+| Validation | 818 (16%) | ~40 (4.9%) | Threshold tuning: never used for model training |
+| Test | 1,022 (20%) | 50 (4.9%) | Final evaluation: held out throughout all modelling stages |
 
 ### 5.6 Evaluation Metrics
 
@@ -264,7 +264,7 @@ Given the clinical context, metrics are prioritised as follows:
 
 | Metric | Priority | Rationale |
 |---|---|---|
-| Recall / Sensitivity | **Critical** | Minimises missed strokes — the highest cost clinical error |
+| Recall / Sensitivity | **Critical** | Minimises missed strokes: the highest cost clinical error |
 | AUC-PR / Average Precision | Primary | Most informative for imbalanced binary classification |
 | ROC-AUC | Primary | Overall discriminative ability across all thresholds |
 | F1-Score | Secondary | Harmonic mean of precision and recall |
@@ -301,7 +301,7 @@ Given the clinical context, metrics are prioritised as follows:
 | Soft Voting | — | 0.828 | 0.191 | 0.260 | 0.200 | 0.226 |
 | **Stacking Ensemble** | — | **0.838** | **0.215** | 0.780 | 0.194 | **0.311** |
 
-The Balanced mode results confirm that Stacking Ensemble is the superior model when both precision and recall are weighted — it achieves the highest F1 (0.311) while maintaining strong recall (0.780).
+The Balanced mode results confirm that Stacking Ensemble is the superior model when both precision and recall are weighted: it achieves the highest F1 (0.311) while maintaining strong recall (0.780).
 
 ### 6.2 ROC Curves, Precision-Recall Curves, and Feature Importance
 
@@ -347,10 +347,10 @@ Three of the top four features are engineered rather than original clinical feat
 
 ### 6.6 Key Performance Interpretation
 
-- Logistic Regression achieves the highest recall (0.940) in High Sensitivity mode — only 3 stroke patients missed from 50 in the test set
+- Logistic Regression achieves the highest recall (0.940) in High Sensitivity mode: only 3 stroke patients missed from 50 in the test set
 - Stacking Ensemble gives the best overall AUC-PR (0.215) and highest F1 in Balanced mode (0.311)
-- XGBoost alone is not the strongest recall model in this small minority-class regime — see Section 7.1 for explanation
-- Threshold tuning materially changes the operational behaviour of every model — the default 0.50 threshold is inappropriate for this clinical task
+- XGBoost alone is not the strongest recall model in this small minority class regime: see Section 7.1 for explanation
+- Threshold tuning materially changes the operational behaviour of every model: the default 0.50 threshold is inappropriate for this clinical task
 - Engineered features consistently outrank original clinical features in XGBoost importance, validating the feature engineering process
 
 ---
@@ -359,15 +359,15 @@ Three of the top four features are engineered rather than original clinical feat
 
 ### 7.1 Why Logistic Regression Outperforms XGBoost on Recall
 
-The most striking result is that Logistic Regression outperforms XGBoost on recall (0.940 vs 0.460) despite XGBoost being a more complex algorithm. This is a direct manifestation of the bias-variance tradeoff under small minority class conditions. With only 249 genuine stroke training cases, XGBoost has insufficient minority-class data to reliably learn the complex non-linear decision boundaries that make gradient boosting superior on larger datasets. In this regime, the model exhibits high variance — it overfits to specific combinations of features seen in the 249 training stroke cases and fails to generalise. Logistic Regression, being a simpler regularised linear model, finds the dominant separating boundary (governed by age and comorbidity features) and extrapolates it more reliably to unseen stroke patients.
+The most striking result is that Logistic Regression outperforms XGBoost on recall (0.940 vs 0.460) despite XGBoost being a more complex algorithm. This is a direct manifestation of the bias-variance tradeoff under small minority class conditions. With only 249 genuine stroke training cases, XGBoost has insufficient minority-class data to reliably learn the complex non-linear decision boundaries that make gradient boosting superior on larger datasets. In this regime, the model exhibits high variance: it overfits to specific combinations of features seen in the 249 training stroke cases and fails to generalise. Logistic Regression, being a simpler regularised linear model, finds the dominant separating boundary (governed by age and comorbidity features) and extrapolates it more reliably to unseen stroke patients.
 
-This finding is consistent with established literature on medical machine learning: complex models do not always outperform simpler ones when minority class training data is scarce. It also explains why the Stacking Ensemble bridges the gap — by combining Logistic Regression's reliable linear boundary with Random Forest and XGBoost's non-linear contributions, the meta-learner achieves better overall precision-recall performance than any individual model alone.
+This finding is consistent with established literature on medical machine learning: complex models do not always outperform simpler ones when minority class training data is scarce. It also explains why the Stacking Ensemble bridges the gap: by combining Logistic Regression's reliable linear boundary with Random Forest and XGBoost's non linear contributions, the meta-learner achieves better overall precision recall performance than any individual model alone.
 
 ### 7.2 Clinical Interpretation of Key Findings
 
 The strongest findings are consistent with established medical knowledge:
 
-- **Age** is the dominant non-modifiable risk factor. The non-linear acceleration captured by `age_squared` is the most important feature, confirming that risk grows exponentially rather than linearly after middle age. A patient aged 70 does not have twice the stroke risk of a 35-year-old but many times higher.
+- **Age** is the dominant non modifiable risk factor. The non linear acceleration captured by `age_squared` is the most important feature, confirming that risk grows exponentially rather than linearly after middle age. A patient aged 70 does not have twice the stroke risk of a 35 year old but many times higher.
 - **Hypertension and heart disease** compound risk. The `cvd_count` feature, which represents cumulative cardiovascular burden, outperforms either comorbidity independently, consistent with the clinical understanding that stroke risk factors multiply rather than add.
 - **Glucose and BMI** matter primarily through interaction terms. `glucose_x_bmi` captures the joint metabolic risk of hyperglycaemia and obesity — a subgroup for whom combined dietary and pharmacological intervention may yield the greatest stroke prevention benefit.
 - **Smoking status** adds useful signal, particularly where data quality is mixed. The `unknown` smoking category shows elevated stroke rates, likely capturing patients reluctant to disclose smoking status due to existing health concerns.
@@ -446,8 +446,6 @@ The visual analysis, statistical testing, and feature importance analysis all re
 [6] T. Chen and C. Guestrin, "XGBoost: A scalable tree boosting system," *KDD*, 2016.
 
 ---
-
-## Appendix: Contribution Statement
 
 ## Appendix: Contribution Statement
 
